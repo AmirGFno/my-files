@@ -1,0 +1,46 @@
+name: probe-right-margin
+on:
+  push:
+    paths: [.ci-probe]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: curl -sSL -A "Mozilla/5.0" --max-time 600 -o original.pdf "https://cf.linkulu.com/dl/6ae1aa03c8b58d63b66d7e6d"
+      - run: pip install --quiet pymupdf numpy scipy
+      - name: stage2
+        run: python tools/strip_watermarks.py original.pdf clean.pdf v.txt
+      - name: right margin crops
+        run: |
+          mkdir -p docs
+          python - <<'PY'
+          import numpy as np, pymupdf
+          d = pymupdf.open("clean.pdf")
+          bands = [4, 5, 20, 61, 100, 151, 200, 250, 283]
+          strips = []
+          for p in bands:
+              page = d[p-1]
+              x = [i for i in page.get_images(full=True) if i[7]=="I0"][0][0]
+              w = int(d.xref_get_key(x,"Width")[1]); h = int(d.xref_get_key(x,"Height")[1])
+              a = np.frombuffer(d.xref_stream(x), np.uint8).reshape(h,w,3)
+              strips.append(a[:, -260:])          # right 260 px
+          H = max(s.shape[0] for s in strips); W = sum(s.shape[1] for s in strips)+10*len(strips)
+          canvas = np.full((H, W, 3), 200, np.uint8)
+          x0 = 0
+          for s in strips:
+              canvas[:s.shape[0], x0:x0+s.shape[1]] = s; x0 += s.shape[1]+10
+          pymupdf.Pixmap(pymupdf.csRGB, canvas.shape[1], canvas.shape[0], canvas.tobytes(), 0).save("docs/right_margin_before.png")
+          # also a couple of full renders
+          for p in (4, 151):
+              d[p-1].get_pixmap(dpi=90).save(f"docs/probe_p{p}.png")
+          print("whiteshare page4:", float((np.frombuffer(d.xref_stream([i for i in d[3].get_images(full=True) if i[7]=="I0"][0][0]), np.uint8).astype(np.float32).mean()>215)))
+          d.close()
+          PY
+      - name: commit
+        run: |
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs; git commit -m "probe: right margin crops" || echo none; git push || echo skip
