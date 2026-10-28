@@ -1,0 +1,115 @@
+name: final-pipeline
+
+on:
+  push:
+    paths: [.ci-final]
+
+permissions:
+  contents: write
+
+jobs:
+  final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download source PDF (with retries)
+        run: |
+          mkdir -p ci docs
+          for i in 1 2 3 4 5; do
+            echo "attempt $i"
+            curl -sSL -A "Mozilla/5.0" --max-time 900 -o original.pdf \
+                 -w "http_code=%{http_code} size=%{size_download}\n" \
+                 "https://cf.linkulu.com/dl/6ae1aa03c8b58d63b66d7e6d" && \
+              [ "$(stat -c%s original.pdf)" -gt 100000000 ] && break
+            sleep 15
+          done
+          ls -l original.pdf; sha256sum original.pdf | tee ci/fetch.txt
+
+      - name: Install deps
+        run: pip install --quiet pymupdf numpy scipy
+
+      - name: Stage 2 - strip watermarks
+        run: |
+          A="KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf"
+          python tools/strip_watermarks.py original.pdf "$A" validation_report.txt 2>&1 | tee ci/process.log
+          rm -f original.pdf
+          echo "STAGE2=$A" >> "$GITHUB_ENV"
+
+      - name: Right margin probe (artifacts for inspection)
+        run: |
+          python - <<'PY'
+          import numpy as np, pymupdf
+          d = pymupdf.open(__import__("os").environ["STAGE2"])
+          pages = [4, 20, 61, 151, 200, 283]
+          strips = []
+          for p in pages:
+              page = d[p-1]
+              x = [i for i in page.get_images(full=True) if i[7]=="I0"][0][0]
+              w = int(d.xref_get_key(x,"Width")[1]); h = int(d.xref_get_key(x,"Height")[1])
+              a = np.frombuffer(d.xref_stream(x), np.uint8).reshape(h,w,3)
+              strips.append(a[:, -300:])
+              print("page", p, "size", w, h, "pt width", page.rect.width)
+          H = max(s.shape[0] for s in strips)
+          W = sum(s.shape[1] for s in strips) + 12*len(strips)
+          canvas = np.full((H, W, 3), 120, np.uint8)
+          x0 = 0
+          for s in strips:
+              canvas[:s.shape[0], x0:x0+s.shape[1]] = s; x0 += s.shape[1]+12
+          pymupdf.Pixmap(pymupdf.csRGB, canvas.shape[1], canvas.shape[0], canvas.tobytes(), 0).save("docs/right_margin.png")
+          for p in (4, 151):
+              d[p-1].get_pixmap(dpi=100).save(f"docs/margin_p{p}.png")
+          d.close()
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs validation_report.txt ci && git commit -m "probe: right margin of stage2" || echo none
+          git push || echo skip
+
+      - name: Stage 3 - repair black scan edges
+        run: |
+          B="KECHAP_BOOK_بیست‌ینو قریشی 1406 (ترمیم‌شده).pdf"
+          time python tools/repair_edges.py "$STAGE2" "$B" 2>&1 | tee ci/repair.log
+          echo "STAGE3=$B" >> "$GITHUB_ENV"
+
+      - name: Stage 4 - white bar, bolder print, <100 MB
+        env:
+          BAR_FROM: "4"
+          BAR_START_PT: "560"
+          BUDGET_MB: "96"
+          Q_TOP: "86"
+          Q_BOTTOM: "64"
+        run: |
+          F="KECHAP_BOOK_بیست‌ینو قریشی 1406 (نسخه نهایی).pdf"
+          time python tools/finalize_pdf.py "$STAGE3" "$F" final_report.txt 2>&1 | tee ci/final.log
+          echo "STAGE4=$F" >> "$GITHUB_ENV"
+          for f in final_p4 final_p151 final_p283; do [ -f "$f.png" ] && cp "$f.png" "docs/$f.png"; done
+          ls -l "$F"
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          DELETE_OLD: "0"
+        run: |
+          python - <<'PY'
+          import json, os
+          assets = [
+              {"path": os.environ["STAGE4"],
+               "name": "KECHAP_BOOK_BISTINO_1406_final-under100mb.pdf",
+               "label": "stage4"},
+          ]
+          with open("/tmp/assets.json", "w", encoding="utf-8") as f:
+              json.dump(assets, f, ensure_ascii=False)
+          PY
+          ASSETS="$(cat /tmp/assets.json)" python tools/publish_release.py
+
+      - name: Commit reports
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add final_report.txt ci docs
+          git commit -m "docs: stage4 report and renders" || echo none
+          git push || echo skip
