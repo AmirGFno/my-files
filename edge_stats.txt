@@ -1,0 +1,10 @@
+pages: before=283 after=283
+ page interior_before interior_after border_before border_after
+    1          177122         175734         13106          784
+   61           55614          55614         17016          726
+  151           42390          42390          9510            0
+  152           32032          32032          7766            0
+  250           80182          80182          8021            0
+  283          145508         145508         22703         1907
+
+RESULT: REVIEW NEEDED

@@ -6,14 +6,14 @@
 | نام asset در Releases | `KECHAP_BOOK_BISTINO_1406_watermark-free.pdf` |
 | تعداد صفحات | 283 |
 | حجم | 152,515,517 بایت (145.45 مگابایت) |
-| SHA256 | `040adc260400c50df3bdb2573887ae6c5af41f66737dee5c7bc4ee57d411c611` |
+| SHA256 | `c8417d612a1d473d2f3bdcdcff6a54370084987b4eb94ef122367389139a1445` |
 | فرمت | PDF 1.7 اسکن‌شده (NAPS2 / PDFsharp) |
 
 ## دانلود
 
 فایل بزرگ‌تر از سقف ۱۰۰ مگابایتی گیت‌هاب است، بنابراین به‌صورت asset ریلیز منتشر شده:
 
-**https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_watermark-free.pdf**
+**https://github.com/AmirGFno/my-files/releases/download/v1/**
 
 صفحه ریلیز: https://github.com/AmirGFno/my-files/releases/tag/v1
 
@@ -48,7 +48,7 @@ source file           : original.pdf
 output file           : KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf
 source size (bytes)   : 152718885
 output size (bytes)   : 152515517  (145.45 MiB)
-sha256                : 040adc260400c50df3bdb2573887ae6c5af41f66737dee5c7bc4ee57d411c611
+sha256                : c8417d612a1d473d2f3bdcdcff6a54370084987b4eb94ef122367389139a1445
 
 pages                 : 283 (expected 283)
 artifact blocks in src: 1698
