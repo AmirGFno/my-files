@@ -35,6 +35,7 @@ jobs:
           for f in cover p151 last; do [ -f "$f.png" ] && cp "$f.png" "docs/render_$f.png"; done
           rm -f original.pdf
           echo "OUT=$OUT" >> "$GITHUB_ENV"
+          echo "ASSET_NAME=KECHAP_BOOK_BISTINO_1406_watermark-free.pdf" >> "$GITHUB_ENV"
 
       - name: Publish release asset (UTF-8 safe)
         env:

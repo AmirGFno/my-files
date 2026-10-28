@@ -33,6 +33,7 @@ readme = f"""# کچاپ بوک — بیست‌ینو قریشی ۱۴۰۶ (بدو
 | مشخصه | مقدار |
 |---|---|
 | نام فایل | `{out_name}` |
+| نام asset در Releases | `{rel.get('asset_name', 'KECHAP_BOOK_BISTINO_1406_watermark-free.pdf')}` |
 | تعداد صفحات | {pages} |
 | حجم | {size_bytes:,} بایت ({size_mib} مگابایت) |
 | SHA256 | `{sha}` |
@@ -47,6 +48,13 @@ readme = f"""# کچاپ بوک — بیست‌ینو قریشی ۱۴۰۶ (بدو
 صفحه ریلیز: {release_url}
 
 > فایل در یک ریپوی Private است؛ برای دانلود باید با حساب GitHub خود وارد شده باشید.
+
+نام asset در گیت‌هاب ASCII است (گیت‌هاب نام‌های غیرانگلیسی را حذف می‌کند). بعد از دانلود،
+برای برگرداندن نام اصلی:
+
+```bash
+mv "{rel.get('asset_name', 'KECHAP_BOOK_BISTINO_1406_watermark-free.pdf')}" "{out_name}"
+```
 
 ## چه کاری انجام شد
 

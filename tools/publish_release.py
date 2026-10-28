@@ -52,7 +52,9 @@ def sha256_file(path):
     return h.hexdigest()
 
 
-name = os.path.basename(PDF)
+# GitHub sanitises non-ASCII asset names to ASCII, so publish under an explicit
+# clean ASCII name; the Persian filename + rename command live in the README.
+name = os.environ.get("ASSET_NAME", "KECHAP_BOOK_BISTINO_1406_watermark-free.pdf")
 local_sha = sha256_file(PDF)
 size = os.path.getsize(PDF)
 print(f"local: {name} {size} bytes sha256={local_sha}", flush=True)
