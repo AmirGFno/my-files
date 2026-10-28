@@ -1,0 +1,90 @@
+name: build-watermark-free
+
+on:
+  push:
+    branches: [arena/4a21732a-my-files]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch source PDF
+        continue-on-error: true
+        run: |
+          mkdir -p ci
+          URL="https://cf.linkulu.com/dl/6ae1aa03c8b58d63b66d7e6d"
+          echo "== url: $URL" > ci/fetch.txt
+          curl -sSL -A "Mozilla/5.0" --max-time 120 -D ci/headers.txt \
+               -o original.pdf -w "http_code=%{http_code} size=%{size_download} time=%{time_total}\n" "$URL" \
+               >> ci/fetch.txt 2>&1 || echo "curl_exit=$?" >> ci/fetch.txt
+          echo "--- response headers ---" >> ci/fetch.txt
+          head -40 ci/headers.txt >> ci/fetch.txt 2>/dev/null || true
+          if [ -f original.pdf ]; then
+            echo "--- local ---" >> ci/fetch.txt
+            ls -l original.pdf >> ci/fetch.txt
+            sha256sum original.pdf >> ci/fetch.txt
+            head -c 16 original.pdf | od -c | head -3 >> ci/fetch.txt
+          fi
+          cat ci/fetch.txt
+
+      - name: Install PyMuPDF
+        run: pip install --quiet pymupdf
+
+      - name: Inspect + strip watermarks
+        continue-on-error: true
+        run: |
+          set +e
+          if [ ! -s original.pdf ]; then
+            echo "SOURCE MISSING -- download failed" | tee ci/process.log
+            exit 0
+          fi
+          mkdir -p ci docs
+          python - <<'PY' 2>&1 | tee ci/inspect.log
+          import pymupdf, re
+          d = pymupdf.open("original.pdf")
+          print("pages:", d.page_count)
+          print("metadata:", d.metadata)
+          print("catalog keys:", [k for k in d.xref_get_keys(d.pdf_catalog())])
+          s = d[0].read_contents()
+          print("stream0 len:", len(s))
+          print("stream0:", s[:900])
+          print("images p1:", d[0].get_images(full=True))
+          print("resources p1:", d.xref_get_key(d[0].xref, "Resources"))
+          print("fonts in file:", sum(1 for x in range(1, d.xref_length()) if d.xref_get_key(x, 'Type')[1] == '/Font'))
+          PY
+          OUT="KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf"
+          python tools/strip_watermarks.py "original.pdf" "$OUT" validation_report.txt 2>&1 | tee -a ci/process.log
+          echo "process_exit=$?" >> ci/process.log
+          for f in cover p151 last; do [ -f "$f.png" ] && cp "$f.png" "docs/render_$f.png"; done
+          ls -l
+
+      - name: Publish report + renders to branch
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A ci validation_report.txt docs 2>/dev/null || true
+          git commit -m "ci: watermark strip report" 2>&1 | tail -2 || echo "nothing to commit"
+          git push 2>&1 | tail -3 || echo "push skipped"
+
+      - name: Upload release asset
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          OUT="KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf"
+          if [ ! -f "$OUT" ]; then echo "no output pdf; skip release"; exit 0; fi
+          SIZE=$(stat -c%s "$OUT")
+          echo "size=$SIZE"
+          gh release view v1 >/dev/null 2>&1 || \
+            gh release create v1 --title "KECHAP BOOK 1406 — بدون واترمارک" \
+              --notes "PDF اسکن‌شده بدون واترمارک (۲۸۳ صفحه)." || true
+          gh release upload v1 "$OUT" --clobber 2>&1 | tail -3
+          gh release view v1 --json assets --jq '.assets[] | {name,size,url}'

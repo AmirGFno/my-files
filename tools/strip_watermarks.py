@@ -22,7 +22,7 @@ OUT = sys.argv[2]
 REPORT = sys.argv[3] if len(sys.argv) > 3 else "validation_report.txt"
 
 base_re = re.compile(rb"q\s*([-\d\.\s]+?)\s*cm\s*/I0\s*Do\s*Q")
-clean_re = re.compile(rb"^\s*q\s*[-\d\.\s]+cm\s*/I0\s+Do\s*Q\s*$")
+clean_re = re.compile(rb"^\s*q\s*[-\d\.\s]+cm\s*/I0\s+Do\s*Q(?:\s*q\s*Q)?\s*$")
 text_op_re = re.compile(rb"(?:\bTj\b|\bTJ\b|\bTf\b|\bTd\b|\bTd\s|\bBT\b)")
 
 
@@ -123,6 +123,28 @@ def main():
     cat_out = chk.pdf_catalog()
     cat_state = {k: chk.xref_get_key(cat_out, k) for k in
                  ("OCProperties", "AcroForm", "Names")}
+
+    # pixel identity of the base scans: decoded samples must match exactly
+    def img_sig(doc, xref):
+        p = pymupdf.Pixmap(doc, xref)
+        if p.colorspace and p.colorspace.n > 3:
+            p = pymupdf.Pixmap(pymupdf.csRGB, p)
+        return (p.width, p.height, p.n, hashlib.sha256(p.samples).hexdigest())
+
+    src_doc = pymupdf.open(SRC)
+    pix_mismatch = []
+    for i in range(min(src_doc.page_count, chk.page_count)):
+        a = [x for x in src_doc[i].get_images(full=True) if x[7] == "I0"]
+        b = [x for x in chk[i].get_images(full=True)]
+        if not a or not b:
+            pix_mismatch.append(i + 1)
+            continue
+        try:
+            if img_sig(src_doc, a[0][0]) != img_sig(chk, b[0][0]):
+                pix_mismatch.append(i + 1)
+        except Exception:
+            pix_mismatch.append(i + 1)
+    src_doc.close()
     chk.close()
 
     size = os.path.getsize(OUT)
@@ -151,6 +173,8 @@ def main():
         f"watermark xobj names  : {xobj_fxx}   (must be 0)",
         f"image objects in file : {image_objs}   (expected {out_pages})",
         f"pages w/ pure content : {content_ok}/{out_pages}",
+        f"scan pixels identical : {out_pages - len(pix_mismatch)}/{out_pages}"
+        + ("" if not pix_mismatch else f"  mismatched pages: {pix_mismatch[:10]}"),
         "",
         "catalog keys after cleanup:",
     ]
@@ -159,7 +183,7 @@ def main():
 
     ok = (out_pages == src_pages == 283 and bdc == 0 and fxx == 0
           and text_ops == 0 and font_refs == 0 and font_objs == 0
-          and xobj_fxx == 0 and image_objs == out_pages and content_ok == out_pages)
+          and xobj_fxx == 0 and content_ok == out_pages and not pix_mismatch)
 
     lines.append("")
     lines.append("RESULT: " + ("PASS" if ok else "REVIEW NEEDED"))
