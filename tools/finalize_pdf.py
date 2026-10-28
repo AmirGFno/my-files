@@ -118,12 +118,20 @@ def bolden(arr, colour_page):
     return (x * 255.0 + 0.5).astype(np.uint8)
 
 
+SCAN_BORDER = int(os.environ.get("SCAN_BORDER", 14))
+
+
 def bar_start_px(plane_gray, cand):
-    """x where the white bar may start without eating printed ink"""
+    """x where the white bar may start without eating printed ink
+
+    The scanner leaves a thin dark border on the outer few pixels; that is not
+    content, so it is ignored when looking for printed ink.
+    """
     W = plane_gray.shape[1]
-    if cand >= W - 2:
-        return 0
-    ink = plane_gray[:, cand:] < 140
+    stop = max(cand + 4, W - SCAN_BORDER)
+    if cand >= stop - 1:
+        return cand if cand < W - 3 else 0
+    ink = plane_gray[:, cand:stop] < 140
     if not ink.any():
         return cand
     col_frac = ink.mean(axis=0)
@@ -144,8 +152,7 @@ def bar_start_px(plane_gray, cand):
             i += 1
     if not real.any():
         return cand
-    x = cand + int(np.nonzero(real)[0].max()) + 3
-    return x if x < W - 3 else 0
+    return min(W - 4, cand + int(np.nonzero(real)[0].max()) + 3)
 
 
 def build_plane(arr, x0, colour_page, keep_colour):
@@ -223,8 +230,8 @@ def main():
         arr = decode(doc, p["xref"])
         plane = build_plane(arr, p["x0"], p["colour_page"],
                             keep_colour and p["has_colour"])
-        write_image(doc, p["xref"], jpeg(plane, quality), not keep_colour or
-                    not p["has_colour"], p["w"], p["h"])
+        write_image(doc, p["xref"], jpeg(plane, quality), plane.ndim == 2,
+                    p["w"], p["h"])
         del arr, plane
         if p["no"] % 50 == 0:
             print(f"  wrote page {p['no']}", flush=True)
