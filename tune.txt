@@ -1,4 +1,4 @@
-[0;93m2026-10-28 09:43:53.878035824 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+[0;93m2026-10-28 09:47:58.419253228 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
 
 === pixel dump, page 1 left 110 px, rows 780..1200 step 30
   y= 780 |.................... .... +#****#***##*******##********|  gray=[26, 26, 26, 25, 178, 179, 179]
@@ -27,5 +27,5 @@
   y=1180 |...... ........ ..*************************************|  gray=[26, 26, 26, 177, 178, 178, 177]
   y=1220 |...... ...........-************************************|  gray=[26, 26, 26, 177, 177, 178, 177]
   y=1260 |...... ...........+++++++++++++++++++++****************|  gray=[26, 26, 26, 145, 142, 174, 177]
-  cover tol=25: border6 13106->  95 border40 77944->  4966 interior 177122->175581 delta=-1541
-  last tol=25: border6 22703->  12 border40 124333->  4720 interior 145508->145483 delta=-25
+  cover tol=25: border6 13106->  95 border40 77944->  5287 interior 177122->175581 delta=-1541
+  last tol=25: border6 22703->   6 border40 124333->  5885 interior 145508->145499 delta=-9
