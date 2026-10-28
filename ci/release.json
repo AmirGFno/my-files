@@ -3,27 +3,15 @@
   "tag": "v1",
   "assets": [
     {
-      "name": "KECHAP_BOOK_BISTINO_1406_watermark-free.pdf",
-      "label": "stage2",
-      "sha256": "c2085ceed351ce21d9c7176b03b91d239197b41a2d09033c5c67b27a4fe88a41",
-      "size": 152515517,
-      "asset_name": "KECHAP_BOOK_BISTINO_1406_watermark-free.pdf",
-      "asset_size": 152515517,
-      "browser_download_url": "https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_watermark-free.pdf",
-      "sha256_remote": "c2085ceed351ce21d9c7176b03b91d239197b41a2d09033c5c67b27a4fe88a41",
-      "bytes_verified": 152515517,
-      "verified": true
-    },
-    {
-      "name": "KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf",
-      "label": "stage3",
-      "sha256": "49bab04c36ae2df51dabdc69dbbf794194c9f67f959f529b4d8cb4f986e8473a",
-      "size": 144704378,
-      "asset_name": "KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf",
-      "asset_size": 144704378,
-      "browser_download_url": "https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf",
-      "sha256_remote": "49bab04c36ae2df51dabdc69dbbf794194c9f67f959f529b4d8cb4f986e8473a",
-      "bytes_verified": 144704378,
+      "name": "KECHAP_BOOK_BISTINO_1406_final-under100mb.pdf",
+      "label": "stage4",
+      "sha256": "df45181f499d74f00e631301a03e0b52275b90567a59e6d6289a73da55bea316",
+      "size": 56697426,
+      "asset_name": "KECHAP_BOOK_BISTINO_1406_final-under100mb.pdf",
+      "asset_size": 56697426,
+      "browser_download_url": "https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_final-under100mb.pdf",
+      "sha256_remote": "df45181f499d74f00e631301a03e0b52275b90567a59e6d6289a73da55bea316",
+      "bytes_verified": 56697426,
       "verified": true
     }
   ]
