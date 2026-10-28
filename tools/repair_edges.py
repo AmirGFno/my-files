@@ -31,6 +31,9 @@ OUT = sys.argv[2] if len(sys.argv) > 2 else \
 
 BRIGHT, RUN, MAXOFF, TOL, INSIDE = 215, 20, 150, 3.0, 2
 
+DARKMAX, SATMAX, NEARB, FRACPIX = 140, 50, 90, 0.04
+
+
 # cover pages: the scan band is often near-black but slightly colourful, so
 # luminance is the reliable signal; saturation is ignored on purpose.
 ART_DARKMAX = int(os.environ.get("ART_DARKMAX", 110))
@@ -44,10 +47,8 @@ ART_CAP = int(os.environ.get("ART_CAP", 0))
 # deepest dark run still treated as scan band on a colour page (px)
 ART_MAXRUN = int(os.environ.get("ART_MAXRUN", 90))
 ART_SKIP = int(os.environ.get("ART_SKIP", 45))
+ART_GRAD = int(os.environ.get("ART_GRAD", 60))
 SLIVBAND, MAXSLIV = 30, 22
-DARKMAX, SATMAX, NEARB, FRACPIX = 140, 50, 90, 0.04
-
-
 def gray(a):
     return a.astype(np.float32).mean(axis=2)
 
@@ -285,52 +286,55 @@ def band_consensus(arr, fill, darkmax=140, satmax=60, tol=14, maxT=120):
     return out, total
 
 
-def edge_run_fill(arr, darkmax=ART_DARKMAX, maxrun=90, skip=45, minrun=3,
-                  sample=8):
+def edge_run_fill(arr, cap=30, darkmax=ART_DARKMAX, maxrun=ART_MAXT,
+                  minrun=3, sample=8, grad=60, art_darkmax=55):
     """Remove the scan band that hugs a border of a *colour* page.
 
-    The band is not always flush with the border (a bright sliver of the page
-    edge often sits outside it), so the first dark run that starts within
-    `skip` px of the border is measured instead of a prefix run. Lines whose
-    dark run is deeper than `maxrun` belong to the artwork (a leg, a colour
-    block) and are left untouched.
-
-    Instead of a global paper fill the band is replaced by the colour found
-    just inside it on the same line, so the artwork continues naturally.
+    The band is often *not* flush with the border: a bright sliver of the page
+    edge sits outside it. Scanning for a fixed offset is unsafe (it can eat the
+    artwork), so the page edge is located by a sharp bright->dark step of at
+    least `grad` inside the first `cap` px, and only the dark run that starts
+    there is removed. Runs deeper than `maxrun` (a leg, a colour block) are
+    treated as artwork and left alone.
     """
     out = arr.copy()
     dark = gray(out) < darkmax
     H, W = dark.shape
     total = 0
-    for flip in (False, True):          # L/R and T/B in one code path
+    for flip in (False, True):
         plane = out[:, ::-1] if flip else out
         dplane = dark[:, ::-1] if flip else dark
-        for tr in (False, True):        # tr = transpose (top/bottom)
+        for tr in (False, True):
             v = plane.transpose(1, 0, 2) if tr else plane
             d = dplane.T if tr else dplane
-            n_lines, n_len = d.shape
-            for i in range(n_lines):
-                line = d[i]
-                lim = min(skip, n_len)
-                start = 0
-                while start < lim and not line[start]:
-                    start += 1
-                if start >= lim:
+            lines, n_len = d.shape
+            g = v.astype(np.float32).mean(axis=2)
+            lim = min(cap, n_len - 1)
+            if lim <= 1:
+                continue
+            for i in range(lines):
+                row_d, row_g = d[i], g[i]
+                start = -1
+                for j in range(lim):
+                    if (not row_d[j]) and row_d[j + 1] and \
+                            row_g[j] - row_g[j + 1] >= grad:
+                        start = j + 1
+                        break
+                if start < 0:
                     continue
                 end = start
-                while end < n_len and line[end]:
+                while end < n_len and row_d[end]:
                     end += 1
                 run = end - start
                 if run < minrun or run > maxrun:
                     continue
                 total += run
                 if end + 2 < n_len:
-                    ref = v[i, end:min(n_len, end + sample)]
-                    col = np.median(ref, axis=0).astype(np.uint8)
+                    col = np.median(v[i, end:min(n_len, end + sample)],
+                                    axis=0).astype(np.uint8)
                 else:
                     col = np.full(3, 255, np.uint8)
                 v[i, start:end] = col
-            # writes went through views: plane/transpose share memory
     return out, total
 
 
@@ -444,10 +448,10 @@ def fix_page(arr):
         out, _ = border_blocks(out, fill, near=80, frac=0.03)
         out, _ = band_consensus(out, fill, darkmax=ART_DARKMAX,
                                 satmax=ART_SATMAX, tol=ART_TOL, maxT=ART_MAXT)
-        out, _ = edge_run_fill(out, maxrun=ART_MAXRUN, skip=ART_SKIP)
+        out, _ = edge_run_fill(out, maxrun=ART_MAXRUN)
         out, _ = band_consensus(out, fill, darkmax=ART_DARKMAX,
                                 satmax=ART_SATMAX, tol=ART_TOL, maxT=ART_MAXT)
-        out, _ = edge_run_fill(out, maxrun=ART_MAXRUN, skip=ART_SKIP)
+        out, _ = edge_run_fill(out, maxrun=ART_MAXRUN)
         out, _ = frame_clean(out, fill, darkmax=150)
         kind = "art"
     return out, kind
