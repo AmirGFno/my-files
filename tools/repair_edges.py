@@ -16,6 +16,7 @@ Usage:
     python repair_edges.py [SRC.pdf] [OUT.pdf]
 Defaults are the stage-2 / stage-3 file names used by this repo.
 """
+import os
 import sys
 import time
 
@@ -29,6 +30,13 @@ OUT = sys.argv[2] if len(sys.argv) > 2 else \
     "KECHAP_BOOK_بیست‌ینو قریشی 1406 (ترمیم‌شده).pdf"
 
 BRIGHT, RUN, MAXOFF, TOL, INSIDE = 215, 20, 150, 3.0, 2
+
+# cover pages: the scan band is often near-black but slightly colourful, so
+# luminance is the reliable signal; saturation is ignored on purpose.
+ART_DARKMAX = int(os.environ.get("ART_DARKMAX", 110))
+ART_SATMAX = int(os.environ.get("ART_SATMAX", 255))
+ART_TOL = int(os.environ.get("ART_TOL", 20))
+ART_MAXT = int(os.environ.get("ART_MAXT", 120))
 SLIVBAND, MAXSLIV = 30, 22
 DARKMAX, SATMAX, NEARB, FRACPIX = 140, 50, 90, 0.04
 
@@ -338,10 +346,12 @@ def fix_page(arr):
         out, _ = frame_clean(out, fill)
         kind = "text"
     else:
-        out, _ = band_consensus(arr, fill)
+        out, _ = band_consensus(arr, fill, darkmax=ART_DARKMAX,
+                                satmax=ART_SATMAX, tol=ART_TOL, maxT=ART_MAXT)
         out, _ = border_blocks(out, fill, near=80, frac=0.03)
-        out, _ = band_consensus(out, fill)
-        out, _ = frame_clean(out, fill)
+        out, _ = band_consensus(out, fill, darkmax=ART_DARKMAX,
+                                satmax=ART_SATMAX, tol=ART_TOL, maxT=ART_MAXT)
+        out, _ = frame_clean(out, fill, darkmax=150)
         kind = "art"
     return out, kind
 

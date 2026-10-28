@@ -1,0 +1,61 @@
+name: tune-cover-edges
+on:
+  push:
+    branches: [arena/4a21732a-my-files]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download source
+        run: curl -sSL -A "Mozilla/5.0" --max-time 600 -o original.pdf "https://cf.linkulu.com/dl/6ae1aa03c8b58d63b66d7e6d"
+      - name: Deps
+        run: pip install --quiet pymupdf numpy scipy
+      - name: Stage 2
+        run: python tools/strip_watermarks.py original.pdf clean.pdf v.txt
+      - name: Compare art variants on the two covers
+        run: |
+          mkdir -p docs
+          python - <<'PY' 2>&1 | tee tune.txt
+          import os, sys, importlib, numpy as np, pymupdf
+          sys.path.insert(0, "tools")
+
+          def load(doc, idx):
+              p = doc[idx]
+              x = [i for i in p.get_images(full=True) if i[7] == "I0"][0][0]
+              w = int(doc.xref_get_key(x, "Width")[1]); h = int(doc.xref_get_key(x, "Height")[1])
+              return np.frombuffer(doc.xref_stream(x), np.uint8).reshape(h, w, 3).copy(), p
+
+          d = pymupdf.open("clean.pdf")
+          variants = [(110,255,20,120),(110,255,30,120),(95,255,25,140),(100,60,20,120),(120,255,25,120)]
+          for pno, tag in ((1,"cover"),(283,"last")):
+              arr, page = load(d, pno-1)
+              g0 = arr.astype(np.float32).mean(axis=2)
+              print(f"\n=== page {pno} {tag} {arr.shape[1]}x{arr.shape[0]}")
+              for dm, sm, tol, mt in variants:
+                  os.environ.update(ART_DARKMAX=str(dm), ART_SATMAX=str(sm), ART_TOL=str(tol), ART_MAXT=str(mt))
+                  import repair_edges
+                  importlib.reload(repair_edges)
+                  out, kind = repair_edges.fix_page(arr)
+                  g1 = out.astype(np.float32).mean(axis=2)
+                  f6 = lambda g: int((np.concatenate([g[:6,:].ravel(),g[-6:,:].ravel(),g[:,:6].ravel(),g[:,-6:].ravel()])<120).sum())
+                  f40 = lambda g: int((np.concatenate([g[:40,:].ravel(),g[-40:,:].ravel(),g[:,:40].ravel(),g[:,-40:].ravel()])<120).sum())
+                  inter0 = int((g0[60:-60,60:-60]<120).sum()); inter1 = int((g1[60:-60,60:-60]<120).sum())
+                  print(f"  dm={dm:3d} sm={sm:3d} tol={tol:2d} maxT={mt:3d} | border6 {f6(g0):6d}->{f6(g1):5d} | border40 {f40(g0):7d}->{f40(g1):6d} | interior {inter0}->{inter1} delta={inter1-inter0}")
+                  if (dm,sm,tol,mt) in ((110,255,20,120),(110,255,30,120)):
+                      pm = pymupdf.Pixmap(pymupdf.csRGB, out.shape[1], out.shape[0], out.tobytes(), 0)
+                      pm.save(f"docs/tune_{tag}_{dm}_{sm}_{tol}.png")
+          d.close()
+          PY
+          ls docs | head
+      - name: Commit tuning results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tune.txt docs
+          git commit -m "debug: cover edge tuning results" || echo nothing
+          git push || echo skipped
