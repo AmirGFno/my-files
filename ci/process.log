@@ -1,11 +1,11 @@
-[0;93m2026-10-28 08:23:19.128945720 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+[0;93m2026-10-28 08:25:48.936173511 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
 VALIDATION REPORT
 =================
 source file           : original.pdf
 output file           : KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf
 source size (bytes)   : 152718885
 output size (bytes)   : 152515517  (145.45 MiB)
-sha256                : 23510bd64cc4a8f91e4a9befbb6e06b18f97f9a165a2fce9285db2a0d812f879
+sha256                : ca31435b2f2ec101295486f9f5488c81f9cfaf7cd381f721cb3b205d0d7c226c
 
 pages                 : 283 (expected 283)
 artifact blocks in src: 1698
@@ -25,4 +25,3 @@ catalog keys after cleanup:
   Names        -> ('null', 'null')
 
 RESULT: PASS
-process_exit=0
