@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Before/after edge stats for stage 3 (edge repair).
+"""Before/after stats for stage 3 (edge repair).
 
-For the sample pages it reports, on the embedded scan images directly:
-  * interior_dark : dark pixels well inside the page (text integrity)
-  * border_dark   : dark pixels inside the outer 6-pixel frame (scan band)
-and writes dpi=80 renders of cover / a text page / last page.
+All numbers are measured on the embedded scan images, never on a render:
+  * interior_dark : dark pixels well inside the page   -> must be identical
+  * border_dark   : dark pixels in the outer 6-pixel frame -> should go to ~0
+  * dark removed  : dark->bright changes farther than 150 px from every border
+                    (would mean text was erased)          -> must be 0
+  * brightened    : any pixel that got *darker* after the repair -> must be 0
+Renders of cover / a text page / last page are written at dpi=80.
 
 Usage: edge_stats.py BEFORE.pdf AFTER.pdf
 """
@@ -16,9 +19,10 @@ import pymupdf
 BEFORE, AFTER = sys.argv[1], sys.argv[2]
 SAMPLES = [1, 61, 151, 152, 250, 283]
 RENDER = {1: "cover", 151: "text", 283: "last"}
+GUARD = 150
 
 
-def page_array(doc, idx):
+def load(doc, idx):
     page = doc[idx]
     imgs = [i for i in page.get_images(full=True) if i[7] == "I0"]
     xref = imgs[0][0]
@@ -28,39 +32,64 @@ def page_array(doc, idx):
     return arr, page
 
 
-def stats(arr):
-    g = arr.astype(np.float32).mean(axis=2)
-    interior = int((g[60:-60, 60:-60] < 120).sum())
-    frame = np.concatenate([g[:6, :].ravel(), g[-6:, :].ravel(),
-                            g[:, :6].ravel(), g[:, -6:].ravel()])
-    border = int((frame < 120).sum())
-    return interior, border
+def frame_mask(g, band=6):
+    return np.concatenate([g[:band, :].ravel(), g[-band:, :].ravel(),
+                           g[:, :band].ravel(), g[:, -band:].ravel()])
+
+
+def audit(a, b):
+    ga = a.astype(np.float32).mean(axis=2)
+    gb = b.astype(np.float32).mean(axis=2)
+    interior = (int((ga[60:-60, 60:-60] < 120).sum()),
+                int((gb[60:-60, 60:-60] < 120).sum()))
+    border = (int((frame_mask(ga) < 120).sum()),
+              int((frame_mask(gb) < 120).sum()))
+    removed = (ga < 120) & (gb >= 120)
+    H, W = ga.shape
+    deep = np.zeros_like(removed)
+    deep[GUARD:H - GUARD, GUARD:W - GUARD] = True
+    dark_removed_deep = int((removed & deep).sum())
+    brightened = int(((gb < ga - 20) & (ga >= 160)).sum())  # content got darker
+    return interior, border, dark_removed_deep, brightened
 
 
 def main():
     a, b = pymupdf.open(BEFORE), pymupdf.open(AFTER)
     print(f"pages: before={a.page_count} after={b.page_count}")
-    print(f"{'page':>5} {'interior_dark before':>20} {'after':>10} "
-          f"{'delta':>6} | {'border_dark before':>18} {'after':>8}")
-    rows = []
-    ok = True
-    for p in SAMPLES:
-        ai, ab = stats(page_array(a, p - 1)[0])
-        bi, bb = stats(page_array(b, p - 1)[0])
-        same = ai == bi
-        ok &= same
-        rows.append((p, ai, bi, ab, bb, same))
-        print(f"{p:>5} {ai:>20} {bi:>10} {bi - ai:>6} | {ab:>18} {bb:>8}"
-              f"   {'text intact' if same else 'TEXT CHANGED'}")
+    print(f"{'page':>5} {'interior_dark':>22} {'border_dark':>16} "
+          f"{'dark_removed_deep':>18} {'brightened':>11}  verdict")
+    rows, ok = [], (a.page_count == b.page_count)
+    samples = [p for p in SAMPLES if p <= min(a.page_count, b.page_count)]
+    for p in samples:
+        (i0, i1), (b0, b1), deep, bright = audit(load(a, p - 1)[0],
+                                                 load(b, p - 1)[0])
+        same = i0 == i1
+        shrunk = b1 <= max(300, 0.01 * b0)
+        good = same and shrunk and deep == 0 and bright == 0
+        ok &= good
+        rows.append((p, i0, i1, b0, b1, deep, bright, good))
+        print(f"{p:>5} {i0:>10} -> {i1:<8} {b0:>8} -> {b1:<6} "
+              f"{deep:>18} {bright:>11}  {'OK' if good else 'CHECK'}")
     for p, label in RENDER.items():
-        page_array(b, p - 1)[1].get_pixmap(dpi=80).save(f"{label}.png")
+        if p <= b.page_count:
+            load(b, p - 1)[1].get_pixmap(dpi=80).save(f"{label}.png")
+
     print("\nRESULT:", "PASS" if ok else "REVIEW NEEDED")
     with open("edge_stats.txt", "w", encoding="utf-8") as f:
-        f.write(f"pages: before={a.page_count} after={b.page_count}\n")
-        f.write(f"{'page':>5} {'interior_before':>15} {'interior_after':>14} "
-                f"{'border_before':>13} {'border_after':>12}\n")
-        for p, ai, bi, ab, bb, same in rows:
-            f.write(f"{p:>5} {ai:>15} {bi:>14} {ab:>13} {bb:>12}\n")
+        f.write(f"pages: before={a.page_count} after={b.page_count} "
+                f"(scan images measured directly, no re-render)\n\n")
+        f.write(f"{'page':>5} {'interior_dark':>14} {'after':>10} "
+                f"{'border_dark':>12} {'after':>8} "
+                f"{'dark_removed_deep':>18} {'brightened':>11}\n")
+        for p, i0, i1, b0, b1, deep, bright, _g in rows:
+            f.write(f"{p:>5} {i0:>14} {i1:>10} {b0:>12} {b1:>8} "
+                    f"{deep:>18} {bright:>11}\n")
+        f.write("\ninterior_dark = dark pixels inside the text area "
+                "(identical before/after => no text touched)\n")
+        f.write("border_dark   = dark pixels in the outer 6 px frame (scan band)\n")
+        f.write("dark_removed_deep = dark->bright flips farther than 150 px from "
+                "every border (must be 0)\n")
+        f.write("brightened    = pixels that became darker (must be 0)\n")
         f.write("\nRESULT: " + ("PASS" if ok else "REVIEW NEEDED") + "\n")
     sys.exit(0 if ok else 5)
 

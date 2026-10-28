@@ -215,45 +215,72 @@ def border_blocks(arr, fill, near=NEARB, frac=FRACPIX, darkmax=DARKMAX, satmax=S
     return out, total
 
 
-def run_strip(arr, fill, maxrun=95, minrun=2, jump=30, darkmax=105, satmax=45, passes=3):
-    out = arr.copy()
+def prefix_len(mask):
+    """length of the leading run of True along axis=1 for every row"""
+    m = mask.astype(np.int8)
+    W = m.shape[1]
+    ff = (m == 0).argmax(axis=1).astype(np.int32)
+    alltrue = mask.all(axis=1)
+    ff[alltrue] = W
+    ff[~mask.any(axis=1)] = 0
+    return ff
+
+
+def _strip_uniform(view, mask, fill, tol, maxT):
+    """On a (lines, thickness, 3) view, strip the leading dark run of every line
+    whose run length agrees with the edge-wide consensus."""
+    L = prefix_len(mask)
+    nz = L > 0
+    if nz.sum() < 0.5 * len(L):
+        return 0
+    T = int(np.median(L[nz]))
+    if T < 2 or T > maxT:
+        return 0
+    keep = nz & (np.abs(L - T) <= tol)
+    if not keep.any():
+        return 0
+    lim = int(min(T + tol, L[keep].max()))
+    cut = np.where(keep, np.minimum(L, lim), 0)
     total = 0
-    for _ in range(passes):
-        g = gray(out)
-        band = (g < darkmax) & (sat(out) < satmax)
-        changed = 0
-        H, W = g.shape
-        for y in range(H):
-            row = band[y]
-            x = 0
-            while x < W and row[x]:
-                x += 1
-            if minrun <= x <= maxrun and (x == W or g[y, x] > g[y, :x].mean() + jump):
-                out[y, :x] = fill; changed += x
-            x = W - 1
-            while x >= 0 and row[x]:
-                x -= 1
-            r = W - 1 - x
-            if minrun <= r <= maxrun and (x < 0 or g[y, x] > g[y, x + 1:].mean() + jump):
-                out[y, x + 1:] = fill; changed += r
-        g = gray(out)
-        band = (g < darkmax) & (sat(out) < satmax)
-        for x in range(W):
-            col = band[:, x]
-            y = 0
-            while y < H and col[y]:
-                y += 1
-            if minrun <= y <= maxrun and (y == H or g[y, x] > g[:y, x].mean() + jump):
-                out[:y, x] = fill; changed += y
-            y = H - 1
-            while y >= 0 and col[y]:
-                y -= 1
-            r = H - 1 - y
-            if minrun <= r <= maxrun and (y < 0 or g[y, x] > g[y + 1:, x].mean() + jump):
-                out[y + 1:, x] = fill; changed += r
-        total += changed
-        if changed < 200:
-            break
+    for i in np.nonzero(cut)[0]:
+        c = int(cut[i])
+        view[i, :c] = fill
+        total += c
+    return total
+
+
+def band_consensus(arr, fill, darkmax=140, satmax=60, tol=14, maxT=120):
+    """Strip the border band only where its thickness agrees with the edge-wide
+    consensus, so cover artwork that merely touches the border stays intact.
+
+    A scan band is a *uniform* strip along the whole edge; artwork (a figure, a
+    dark colour block) produces lines with a very different run length and is
+    therefore skipped instead of eaten.
+    """
+    out = arr.copy()
+    band = (gray(out) < darkmax) & (sat(out) < satmax)
+    total = 0
+    # left / right: rows are lines, thickness runs along x
+    total += _strip_uniform(out, band, fill, tol, maxT)
+    total += _strip_uniform(out[:, ::-1], band[:, ::-1], fill, tol, maxT)
+    # top / bottom: transpose so columns become lines
+    tv = out.transpose(1, 0, 2)
+    total += _strip_uniform(tv, band.T, fill, tol, maxT)
+    total += _strip_uniform(tv[:, ::-1], band[::-1, :].T, fill, tol, maxT)
+    return out, total
+
+
+def frame_clean(arr, fill, band=6, darkmax=140, satmax=60):
+    """Whiten dark neutral pixels in the outermost `band` pixels (scan frame)."""
+    out = arr.copy()
+    H, W = out.shape[:2]
+    dark = (gray(out) < darkmax) & (sat(out) < satmax)
+    total = 0
+    for sl in (np.s_[0:band, :], np.s_[H - band:H, :],
+               np.s_[:, 0:band], np.s_[:, W - band:W]):
+        m = dark[sl]
+        total += int(m.sum())
+        out[sl][m] = fill
     return out, total
 
 
@@ -308,11 +335,13 @@ def fix_page(arr):
         out = sliver_clean(out, fill)
         out = speck_clean(out, fill)
         out, _ = border_blocks(out, fill)
+        out, _ = frame_clean(out, fill)
         kind = "text"
     else:
-        out, _ = run_strip(arr, fill)
+        out, _ = band_consensus(arr, fill)
         out, _ = border_blocks(out, fill, near=80, frac=0.03)
-        out, _ = run_strip(out, fill, maxrun=28, jump=20, darkmax=150, satmax=60, passes=2)
+        out, _ = band_consensus(out, fill)
+        out, _ = frame_clean(out, fill)
         kind = "art"
     return out, kind
 
