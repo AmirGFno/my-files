@@ -45,6 +45,7 @@ jobs:
         run: |
           python tools/edge_stats.py "$STAGE2" "$STAGE3" 2>&1 | tee ci/edge_stats.log
           for f in cover text last; do [ -f "$f.png" ] && cp "$f.png" "docs/edge_$f.png"; done
+          for f in diff_cover diff_last; do [ -f "$f.png" ] && cp "$f.png" "docs/$f.png"; done
 
       - name: Publish release assets
         env:

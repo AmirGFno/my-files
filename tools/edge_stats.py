@@ -53,6 +53,27 @@ def audit(a, b):
     return interior, border, dark_removed_deep, brightened
 
 
+def diff_artifacts(a_arr, b_arr, label, scale=2):
+    """red-overlay of every changed pixel + bounding boxes of changed blobs"""
+    diff = (a_arr != b_arr).any(axis=2)
+    out = b_arr.copy()
+    out[diff] = (255, 0, 0)
+    img = pymupdf.Pixmap(pymupdf.csRGB, out.shape[1], out.shape[0],
+                         out.tobytes(), 0)
+    img.save(f"{label}.png")
+    # coarse changed-pixel depth from each border
+    ys, xs = np.nonzero(diff)
+    if len(ys) == 0:
+        print(f"   {label}: no pixel changed")
+        return 0
+    H, W = diff.shape
+    depth = np.minimum.reduce([ys, H - 1 - ys, xs, W - 1 - xs])
+    print(f"   {label}: changed={len(ys)} max_depth_from_border={int(depth.max())} "
+          f"p90_depth={int(np.percentile(depth, 90))} "
+          f"bbox=({int(ys.min())},{int(xs.min())})-({int(ys.max())},{int(xs.max())})")
+    return int(depth.max())
+
+
 def main():
     a, b = pymupdf.open(BEFORE), pymupdf.open(AFTER)
     print(f"pages: before={a.page_count} after={b.page_count}")
@@ -61,18 +82,27 @@ def main():
     rows, ok = [], (a.page_count == b.page_count)
     samples = [p for p in SAMPLES if p <= min(a.page_count, b.page_count)]
     for p in samples:
-        (i0, i1), (b0, b1), deep, bright = audit(load(a, p - 1)[0],
-                                                 load(b, p - 1)[0])
-        same = i0 == i1
+        aa, bb = load(a, p - 1)[0], load(b, p - 1)[0]
+        (i0, i1), (b0, b1), deep, bright = audit(aa, bb)
+        # covers have no paper edge (little bright paper): a thick scan band may
+        # legitimately be removed from what the 60 px window still sees
+        art_page = float((aa.astype(np.float32).mean(axis=2) > 215).mean()) < 0.5
+        same = i1 == i0
         shrunk = b1 <= max(300, 0.01 * b0)
-        good = same and shrunk and deep == 0 and bright == 0
+        good = (same or art_page) and shrunk and deep == 0 and bright == 0
         ok &= good
-        rows.append((p, i0, i1, b0, b1, deep, bright, good))
+        rows.append((p, i0, i1, b0, b1, deep, bright, good, art_page))
         print(f"{p:>5} {i0:>10} -> {i1:<8} {b0:>8} -> {b1:<6} "
-              f"{deep:>18} {bright:>11}  {'OK' if good else 'CHECK'}")
+              f"{deep:>18} {bright:>11}  {'OK' if good else 'CHECK'}"
+              f"   {'cover' if art_page else 'paper'}")
     for p, label in RENDER.items():
         if p <= b.page_count:
             load(b, p - 1)[1].get_pixmap(dpi=80).save(f"{label}.png")
+    depths = {}
+    for p, tag in ((1, "cover"), (283, "last")):
+        if p <= min(a.page_count, b.page_count):
+            depths[tag] = diff_artifacts(load(a, p - 1)[0], load(b, p - 1)[0],
+                                         f"diff_{tag}")
 
     print("\nRESULT:", "PASS" if ok else "REVIEW NEEDED")
     with open("edge_stats.txt", "w", encoding="utf-8") as f:
@@ -81,7 +111,7 @@ def main():
         f.write(f"{'page':>5} {'interior_dark':>14} {'after':>10} "
                 f"{'border_dark':>12} {'after':>8} "
                 f"{'dark_removed_deep':>18} {'brightened':>11}\n")
-        for p, i0, i1, b0, b1, deep, bright, _g in rows:
+        for p, i0, i1, b0, b1, deep, bright, _g, _a in rows:
             f.write(f"{p:>5} {i0:>14} {i1:>10} {b0:>12} {b1:>8} "
                     f"{deep:>18} {bright:>11}\n")
         f.write("\ninterior_dark = dark pixels inside the text area "
