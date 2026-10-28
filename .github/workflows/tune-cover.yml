@@ -72,7 +72,7 @@ jobs:
           for pno, tag in ((1, "cover"), (283, "last")):
               arr, page = load(d, pno-1)
               best = None
-              for tol in (25, 40, 60, 90):
+              for tol in (25,):
                   os.environ["ART_TOL"] = str(tol)
                   importlib.reload(repair_edges)
                   out, kind = repair_edges.fix_page(arr)

@@ -41,6 +41,9 @@ ART_MAXT = int(os.environ.get("ART_MAXT", 140))
 # as it is no deeper than this; artwork that runs deeper (a leg, a big block)
 # starts beyond the cap and is left alone.
 ART_CAP = int(os.environ.get("ART_CAP", 0))
+# deepest dark run still treated as scan band on a colour page (px)
+ART_MAXRUN = int(os.environ.get("ART_MAXRUN", 90))
+ART_SKIP = int(os.environ.get("ART_SKIP", 45))
 SLIVBAND, MAXSLIV = 30, 22
 DARKMAX, SATMAX, NEARB, FRACPIX = 140, 50, 90, 0.04
 
@@ -282,6 +285,55 @@ def band_consensus(arr, fill, darkmax=140, satmax=60, tol=14, maxT=120):
     return out, total
 
 
+def edge_run_fill(arr, darkmax=ART_DARKMAX, maxrun=90, skip=45, minrun=3,
+                  sample=8):
+    """Remove the scan band that hugs a border of a *colour* page.
+
+    The band is not always flush with the border (a bright sliver of the page
+    edge often sits outside it), so the first dark run that starts within
+    `skip` px of the border is measured instead of a prefix run. Lines whose
+    dark run is deeper than `maxrun` belong to the artwork (a leg, a colour
+    block) and are left untouched.
+
+    Instead of a global paper fill the band is replaced by the colour found
+    just inside it on the same line, so the artwork continues naturally.
+    """
+    out = arr.copy()
+    dark = gray(out) < darkmax
+    H, W = dark.shape
+    total = 0
+    for flip in (False, True):          # L/R and T/B in one code path
+        plane = out[:, ::-1] if flip else out
+        dplane = dark[:, ::-1] if flip else dark
+        for tr in (False, True):        # tr = transpose (top/bottom)
+            v = plane.transpose(1, 0, 2) if tr else plane
+            d = dplane.T if tr else dplane
+            n_lines, n_len = d.shape
+            for i in range(n_lines):
+                line = d[i]
+                lim = min(skip, n_len)
+                start = 0
+                while start < lim and not line[start]:
+                    start += 1
+                if start >= lim:
+                    continue
+                end = start
+                while end < n_len and line[end]:
+                    end += 1
+                run = end - start
+                if run < minrun or run > maxrun:
+                    continue
+                total += run
+                if end + 2 < n_len:
+                    ref = v[i, end:min(n_len, end + sample)]
+                    col = np.median(ref, axis=0).astype(np.uint8)
+                else:
+                    col = np.full(3, 255, np.uint8)
+                v[i, start:end] = col
+            # writes went through views: plane/transpose share memory
+    return out, total
+
+
 def cap_strip(arr, fill, cap=140, darkmax=120):
     """Whiten the contiguous dark run that starts at each border, up to `cap` px.
 
@@ -392,8 +444,10 @@ def fix_page(arr):
         out, _ = border_blocks(out, fill, near=80, frac=0.03)
         out, _ = band_consensus(out, fill, darkmax=ART_DARKMAX,
                                 satmax=ART_SATMAX, tol=ART_TOL, maxT=ART_MAXT)
-        if ART_CAP > 0:
-            out, _ = cap_strip(out, fill, cap=ART_CAP, darkmax=ART_DARKMAX)
+        out, _ = edge_run_fill(out, maxrun=ART_MAXRUN, skip=ART_SKIP)
+        out, _ = band_consensus(out, fill, darkmax=ART_DARKMAX,
+                                satmax=ART_SATMAX, tol=ART_TOL, maxT=ART_MAXT)
+        out, _ = edge_run_fill(out, maxrun=ART_MAXRUN, skip=ART_SKIP)
         out, _ = frame_clean(out, fill, darkmax=150)
         kind = "art"
     return out, kind
