@@ -7,7 +7,7 @@
 | نسخه | فایل | حجم | توضیح |
 |---|---|---|---|
 | مرحله ۲ | [`KECHAP_BOOK_BISTINO_1406_watermark-free.pdf`](https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_watermark-free.pdf) | 152,515,517 بایت | فقط واترمارک حذف شده؛ کیفیت اسکن هر صفحه بایت‌به‌بایت دست‌نخورده |
-| مرحله ۳ | [`KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf`](https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf) | 144,725,398 بایت | همان فایل + سفید شدن نوار سیاه لبه‌های اسکن |
+| مرحله ۳ | [`KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf`](https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf) | 144,704,378 بایت | همان فایل + سفید شدن نوار سیاه لبه‌های اسکن |
 
 صفحه ریلیز: https://github.com/AmirGFno/my-files/releases/tag/v1
 
@@ -22,8 +22,8 @@ mv KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf "KECHAP_BOOK_بیست‌ینو ق
 ## SHA256
 
 ```
-8f7605892668b3cabac969d16158dfc3398b816889a2a430885bd4e006de92ab  KECHAP_BOOK_BISTINO_1406_watermark-free.pdf
-8a21db84bb2914dc762a22a24ef897f3c08dff2432794690cd20942c6a02f72c  KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf
+c2085ceed351ce21d9c7176b03b91d239197b41a2d09033c5c67b27a4fe88a41  KECHAP_BOOK_BISTINO_1406_watermark-free.pdf
+49bab04c36ae2df51dabdc69dbbf794194c9f67f959f529b4d8cb4f986e8473a  KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf
 ```
 
 هر دو asset بعد از آپلود دوباره دانلود و SHA256 آن‌ها تطبیق داده شده است.
@@ -58,12 +58,12 @@ JPEG/دوباره فشرده نشده است (فقط استریم تصویر ب�
 pages: before=283 after=283 (scan images measured directly, no re-render)
 
  page  interior_dark      after  border_dark    after  dark_removed_deep  brightened
-    1         177122     175711        13106      153                  0           0
+    1         177122     175581        13106       95                  0           0
    61          55614      55614        17016        8                  0           0
   151          42390      42390         9510        0                  0           0
   152          32032      32032         7766        0                  0           0
   250          80182      80182         8021        0                  0           0
-  283         145508     145508        22703      131                  0           0
+  283         145508     145499        22703        6                  0           0
 
 interior_dark = dark pixels inside the text area (identical before/after => no text touched)
 border_dark   = dark pixels in the outer 6 px frame (scan band)
@@ -94,7 +94,7 @@ source file           : original.pdf
 output file           : KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf
 source size (bytes)   : 152718885
 output size (bytes)   : 152515517  (145.45 MiB)
-sha256                : 8f7605892668b3cabac969d16158dfc3398b816889a2a430885bd4e006de92ab
+sha256                : c2085ceed351ce21d9c7176b03b91d239197b41a2d09033c5c67b27a4fe88a41
 
 pages                 : 283 (expected 283)
 artifact blocks in src: 1698

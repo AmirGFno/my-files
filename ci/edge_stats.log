@@ -1,13 +1,13 @@
-[0;93m2026-10-28 09:16:25.597020707 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+[0;93m2026-10-28 09:58:27.844564252 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
 pages: before=283 after=283
  page          interior_dark      border_dark  dark_removed_deep  brightened  verdict
-    1     177122 -> 175711      13106 -> 153                     0           0  OK   cover
+    1     177122 -> 175581      13106 -> 95                      0           0  OK   cover
    61      55614 -> 55614       17016 -> 8                       0           0  OK   paper
   151      42390 -> 42390        9510 -> 0                       0           0  OK   paper
   152      32032 -> 32032        7766 -> 0                       0           0  OK   paper
   250      80182 -> 80182        8021 -> 0                       0           0  OK   paper
-  283     145508 -> 145508      22703 -> 131                     0           0  OK   cover
-   diff_cover: changed=59435 max_depth_from_border=66 p90_depth=51 bbox=(0,0)-(1577,1166)
-   diff_last: changed=107743 max_depth_from_border=41 p90_depth=30 bbox=(0,0)-(1554,1169)
+  283     145508 -> 145499      22703 -> 6                       0           0  OK   cover
+   diff_cover: changed=89427 max_depth_from_border=67 p90_depth=48 bbox=(0,0)-(1577,1166)
+   diff_last: changed=113936 max_depth_from_border=83 p90_depth=31 bbox=(0,0)-(1554,1169)
 
 RESULT: PASS
