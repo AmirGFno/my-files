@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
-"""Upload the watermark-free PDF as a GitHub Release asset (UTF-8 safe name)
-and verify the uploaded bytes against the local SHA256."""
+"""Publish PDF deliverables as GitHub Release assets (UTF-8 safe names).
+
+Asset names are configured through the ASSETS environment variable, a JSON
+list like:
+    [{"path": "a.pdf", "name": "a_clean.pdf", "label": "..."}]
+
+Every uploaded asset is downloaded back and its SHA256 compared with the local
+file, so a corrupted upload can never go unnoticed. Results land in
+ci/release.json.
+"""
 import hashlib
 import json
 import mimetypes
@@ -11,16 +19,19 @@ import urllib.request
 
 TOKEN = os.environ["GH_TOKEN"]
 REPO = os.environ.get("GH_REPO", "AmirGFno/my-files")
-TAG = "v1"
+TAG = os.environ.get("TAG", "v1")
 API = "https://api.github.com"
-PDF = sys.argv[1]
-RELEASE_TITLE = "KECHAP BOOK 1406 — نسخه بدون واترمارک"
+DELETE_OLD = os.environ.get("DELETE_OLD", "0") == "1"
+
+RELEASE_TITLE = "KECHAP BOOK 1406 — نسخه بدون واترمارک و ترمیم لبه‌ها"
 RELEASE_NOTES = (
     "PDF اسکن‌شده کتاب (۲۸۳ صفحه) با حذف کامل واترمارک‌ها.\n\n"
-    "- کیفیت اسکن هر صفحه دست‌نخورده (بایت‌های تصویر پایه یکسان با فایل مبدأ)\n"
-    "- هیچ بلوک Artifact/Watermark، فونت یا آبجکت XObject واترمارک باقی نمانده "
-    "است\n"
-    "- جزئیات و SHA256 در README و validation_report.txt"
+    "دو فایل منتشر شده است:\n"
+    "- `..._watermark-free.pdf` — خروجی مرحله ۲: فقط واترمارک حذف شده، "
+    "کیفیت اسکن هر صفحه بایت‌به‌بایت دست‌نخورده\n"
+    "- `..._edges-repaired.pdf` — خروجی مرحله ۳: همان فایل + سفید شدن نوارهای "
+    "سیاه حاشیه اسکن (متن هر صفحه بدون تغییر)\n\n"
+    "جزئیات، اعداد اعتبارسنجی و SHA256 در README و validation_report.txt"
 )
 
 
@@ -52,12 +63,11 @@ def sha256_file(path):
     return h.hexdigest()
 
 
-# GitHub sanitises non-ASCII asset names to ASCII, so publish under an explicit
-# clean ASCII name; the Persian filename + rename command live in the README.
-name = os.environ.get("ASSET_NAME", "KECHAP_BOOK_BISTINO_1406_watermark-free.pdf")
-local_sha = sha256_file(PDF)
-size = os.path.getsize(PDF)
-print(f"local: {name} {size} bytes sha256={local_sha}", flush=True)
+assets = json.loads(os.environ["ASSETS"])
+for a in assets:
+    a["sha256"] = sha256_file(a["path"])
+    a["size"] = os.path.getsize(a["path"])
+    print(f"local: {a['name']} {a['size']} bytes sha256={a['sha256']}", flush=True)
 
 # --- ensure release exists -------------------------------------------------
 releases = req("GET", f"/repos/{REPO}/releases?per_page=100")
@@ -73,57 +83,58 @@ else:
               {"name": RELEASE_TITLE, "body": RELEASE_NOTES})
     print("release updated:", rel["id"], flush=True)
 
-# --- drop old assets -------------------------------------------------------
-for a in req("GET", f"/repos/{REPO}/releases/{rel['id']}/assets?per_page=100"):
-    req("DELETE", f"/repos/{REPO}/releases/assets/{a['id']}")
-    print("deleted old asset:", a["name"], flush=True)
+# --- optionally drop old assets --------------------------------------------
+if DELETE_OLD:
+    for old in req("GET", f"/repos/{REPO}/releases/{rel['id']}/assets?per_page=100"):
+        req("DELETE", f"/repos/{REPO}/releases/assets/{old['id']}")
+        print("deleted old asset:", old["name"], flush=True)
 
 # --- upload ----------------------------------------------------------------
-q = urllib.parse.urlencode({"name": name})
-up = (f"https://uploads.github.com/repos/{REPO}/releases/{rel['id']}"
-      f"/assets?{q}")
-ctype = mimetypes.guess_type(name)[0] or "application/pdf"
-with open(PDF, "rb") as f:
-    payload = f.read()
-r = urllib.request.Request(up, data=payload, method="POST", headers={
-    "Authorization": f"Bearer {TOKEN}",
-    "Content-Type": ctype,
-    "Content-Length": str(len(payload)),
-    "User-Agent": "arena-agent",
-})
-with urllib.request.urlopen(r, timeout=1800) as resp:
-    asset = json.loads(resp.read())
-print("uploaded:", asset["name"], asset["size"], asset["state"], flush=True)
+for a in assets:
+    q = urllib.parse.urlencode({"name": a["name"]})
+    up = (f"https://uploads.github.com/repos/{REPO}/releases/{rel['id']}"
+          f"/assets?{q}")
+    ctype = mimetypes.guess_type(a["path"])[0] or "application/pdf"
+    with open(a["path"], "rb") as f:
+        payload = f.read()
+    r = urllib.request.Request(up, data=payload, method="POST", headers={
+        "Authorization": f"Bearer {TOKEN}",
+        "Content-Type": ctype,
+        "Content-Length": str(len(payload)),
+        "User-Agent": "arena-agent",
+    })
+    with urllib.request.urlopen(r, timeout=1800) as resp:
+        uploaded = json.loads(resp.read())
+    print("uploaded:", uploaded["name"], uploaded["size"],
+          uploaded["state"], flush=True)
 
-# --- verify: download it back and compare sha256 ---------------------------
-dreq = urllib.request.Request(
-    f"{API}/repos/{REPO}/releases/assets/{asset['id']}",
-    headers={"Authorization": f"Bearer {TOKEN}",
-             "Accept": "application/octet-stream",
-             "User-Agent": "arena-agent"})
-h = hashlib.sha256()
-n = 0
-with urllib.request.urlopen(dreq, timeout=1800) as resp:
-    for chunk in iter(lambda: resp.read(1 << 20), b""):
-        h.update(chunk)
-        n += len(chunk)
-remote_sha = h.hexdigest()
-ok = (remote_sha == local_sha and n == size)
-print(f"remote: {n} bytes sha256={remote_sha} match={ok}", flush=True)
+    # --- verify: download it back and compare sha256 -----------------------
+    dreq = urllib.request.Request(
+        f"{API}/repos/{REPO}/releases/assets/{uploaded['id']}",
+        headers={"Authorization": f"Bearer {TOKEN}",
+                 "Accept": "application/octet-stream",
+                 "User-Agent": "arena-agent"})
+    h = hashlib.sha256()
+    n = 0
+    with urllib.request.urlopen(dreq, timeout=1800) as resp:
+        for chunk in iter(lambda: resp.read(1 << 20), b""):
+            h.update(chunk)
+            n += len(chunk)
+    a["asset_name"] = uploaded["name"]
+    a["asset_size"] = uploaded["size"]
+    a["browser_download_url"] = uploaded["browser_download_url"]
+    a["sha256_remote"] = h.hexdigest()
+    a["bytes_verified"] = n
+    a["verified"] = (h.hexdigest() == a["sha256"] and n == a["size"])
+    print(f"verified: {a['verified']} ({n} bytes)", flush=True)
 
 info = {
-    "asset_name": asset["name"],
-    "asset_size": asset["size"],
-    "asset_state": asset["state"],
-    "browser_download_url": asset["browser_download_url"],
     "release_url": rel["html_url"],
-    "sha256_local": local_sha,
-    "sha256_remote": remote_sha,
-    "bytes_verified": n,
-    "verified": ok,
+    "tag": TAG,
+    "assets": [{k: v for k, v in a.items() if k != "path"} for a in assets],
 }
 os.makedirs("ci", exist_ok=True)
 with open("ci/release.json", "w", encoding="utf-8") as f:
     json.dump(info, f, ensure_ascii=False, indent=2)
 print(json.dumps(info, ensure_ascii=False, indent=2))
-sys.exit(0 if ok else 4)
+sys.exit(0 if all(a["verified"] for a in assets) else 4)

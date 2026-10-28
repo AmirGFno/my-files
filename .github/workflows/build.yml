@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -24,32 +24,58 @@ jobs:
           ls -l original.pdf | tee -a ci/fetch.txt
           sha256sum original.pdf | tee -a ci/fetch.txt
 
-      - name: Install PyMuPDF
-        run: pip install --quiet pymupdf
+      - name: Install deps
+        run: pip install --quiet pymupdf numpy scipy
 
-      - name: Strip watermarks and validate
+      - name: Stage 2 - strip watermarks
         run: |
-          OUT="KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf"
+          A="KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf"
+          python tools/strip_watermarks.py original.pdf "$A" validation_report.txt 2>&1 | tee ci/process.log
           mkdir -p docs
-          python tools/strip_watermarks.py original.pdf "$OUT" validation_report.txt 2>&1 | tee ci/process.log
           for f in cover p151 last; do [ -f "$f.png" ] && cp "$f.png" "docs/render_$f.png"; done
-          rm -f original.pdf
-          echo "OUT=$OUT" >> "$GITHUB_ENV"
-          echo "ASSET_NAME=KECHAP_BOOK_BISTINO_1406_watermark-free.pdf" >> "$GITHUB_ENV"
+          echo "STAGE2=$A" >> "$GITHUB_ENV"
 
-      - name: Publish release asset (UTF-8 safe)
+      - name: Stage 3 - repair black scan edges
+        run: |
+          B="KECHAP_BOOK_بیست‌ینو قریشی 1406 (ترمیم‌شده).pdf"
+          time python tools/repair_edges.py "$STAGE2" "$B" 2>&1 | tee ci/repair.log
+          echo "STAGE3=$B" >> "$GITHUB_ENV"
+
+      - name: Validate edge repair
+        run: |
+          python tools/edge_stats.py "$STAGE2" "$STAGE3" 2>&1 | tee ci/edge_stats.log
+          for f in cover text last; do [ -f "$f.png" ] && cp "$f.png" "docs/edge_$f.png"; done
+
+      - name: Publish release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: python tools/publish_release.py "$OUT"
+          DELETE_OLD: "1"
+        run: |
+          python - <<'PY'
+          import json, os
+          assets = [
+              {"path": os.environ["STAGE2"],
+               "name": "KECHAP_BOOK_BISTINO_1406_watermark-free.pdf",
+               "label": "stage2"},
+              {"path": os.environ["STAGE3"],
+               "name": "KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf",
+               "label": "stage3"},
+          ]
+          with open("/tmp/assets.json", "w", encoding="utf-8") as f:
+              json.dump(assets, f, ensure_ascii=False)
+          print(json.dumps(assets, ensure_ascii=False, indent=2))
+          PY
+          ASSETS="$(cat /tmp/assets.json)" python tools/publish_release.py
 
       - name: Build README
         run: python tools/make_readme.py
 
       - name: Commit report, README and renders
         run: |
+          rm -f original.pdf
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md validation_report.txt ci docs
-          git commit -m "docs: validation report, renders, README" || echo "nothing to commit"
+          git add README.md validation_report.txt edge_stats.txt ci docs
+          git commit -m "docs: stage3 edge repair report, renders, README" || echo "nothing to commit"
           git push || echo "push skipped"
