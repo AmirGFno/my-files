@@ -1,11 +1,9 @@
 name: build-watermark-free
 
 on:
-  workflow_dispatch:
   push:
-    branches: [arena/4a21732a-my-files]
     paths:
-      - .github/workflows/build.yml
+      - .ci-build
 
 permissions:
   contents: write

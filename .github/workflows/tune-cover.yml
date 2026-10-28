@@ -1,6 +1,8 @@
 name: tune-cover-edges
 on:
-  workflow_dispatch:
+  push:
+    paths:
+      - .ci-tune
 permissions:
   contents: write
 jobs:
