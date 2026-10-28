@@ -1,33 +1,32 @@
 FINAL REPORT (stage 4)
 ======================
-source          : KECHAP_BOOK_بیست‌ینو قریشی 1406 (ترمیم‌شده).pdf
+source          : input.pdf
 output          : KECHAP_BOOK_بیست‌ینو قریشی 1406 (نسخه نهایی).pdf
-size            : 56,697,426 bytes (54.07 MiB)
+size            : 56,643,256 bytes (54.02 MiB)
 under 100 MiB   : YES
 pages           : 283
 codec           : JPEG, colour_kept=True, q=86
-sha256          : df45181f499d74f00e631301a03e0b52275b90567a59e6d6289a73da55bea316
+sha256          : d98b05df9bb03cfd5b8ea959c086fd8e5a5a278f685509984b41ecac350ba65d
 
-white bar       : 68 paper pages from page 4 (start 560.0 pt); colour pages skipped (artwork would be cut)
-bar fully white : NO
+white bar       : 279 paper pages from page 4 (start 560.0 pt); colour pages skipped (artwork would be cut)
+bar fully white : YES
+  page   4 x0=1157 min_gray=  255 dark_frac=0.00000
   page   5 x0=1101 min_gray=  249 dark_frac=0.00000
-  page   6 x0=1100 min_gray=    0 dark_frac=0.67238
-  page   8 x0=1100 min_gray=    0 dark_frac=0.66729
-  page  11 x0=1100 min_gray=    0 dark_frac=0.67031
-  page  20 x0=1100 min_gray=    0 dark_frac=0.67843
-  pages with ink in the bar: [(6, 0.67238, 0.0), (8, 0.66729, 0.0), (11, 0.67031, 0.0), (20, 0.67843, 0.0), (21, 0.67811, 0.0), (23, 0.67581, 0.0), (27, 0.67154, 0.0), (37, 0.67023, 0.0)]
+  page   6 x0=1100 min_gray=  255 dark_frac=0.00000
+  page   7 x0=1158 min_gray=  255 dark_frac=0.00000
+  page   8 x0=1100 min_gray=  255 dark_frac=0.00000
 
 ink metrics on the embedded scan (bolder => cov grows, mean_ink falls):
   page   when   cov<120   cov<190  mean_ink
      1 before     9.94%    70.97%      49.5
      1  after    10.09%    71.46%      41.1
     61 before     3.06%     5.72%      52.7
-    61  after    67.85%    68.82%       1.1
+    61  after     3.75%     5.85%      39.8
    151 before     2.35%     3.36%      49.3
-   151  after    67.38%    68.16%       0.7
+   151  after     2.65%     3.44%      32.4
    250 before     4.46%     6.57%      52.2
-   250  after    68.13%    69.45%       1.2
+   250  after     5.09%     6.77%      34.3
    283 before     8.55%    85.84%      37.9
    283  after     8.68%    85.90%      28.9
 
-RESULT: REVIEW NEEDED
+RESULT: PASS
