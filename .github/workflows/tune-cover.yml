@@ -23,7 +23,10 @@ jobs:
           python - <<'PY' 2>&1 | tee tune.txt
           import os, sys, importlib, numpy as np, pymupdf
           sys.path.insert(0, "tools")
-          os.environ.update(ART_DARKMAX="120", ART_SATMAX="255", ART_TOL="25", ART_MAXT="120")
+          os.environ.update(ART_DARKMAX=os.environ.get("ART_DARKMAX","120"),
+                            ART_SATMAX=os.environ.get("ART_SATMAX","255"),
+                            ART_TOL=os.environ.get("ART_TOL","25"),
+                            ART_MAXT=os.environ.get("ART_MAXT","120"))
           import repair_edges
 
           def load(doc, idx):
@@ -52,15 +55,20 @@ jobs:
               return sheet
 
           d = pymupdf.open("clean.pdf")
+          f6 = lambda g: int((np.concatenate([g[:6,:].ravel(),g[-6:,:].ravel(),g[:,:6].ravel(),g[:,-6:].ravel()])<120).sum())
+          f40 = lambda g: int((np.concatenate([g[:40,:].ravel(),g[-40:,:].ravel(),g[:,:40].ravel(),g[:,-40:].ravel()])<120).sum())
           for pno, tag in ((1, "cover"), (283, "last")):
               arr, page = load(d, pno-1)
-              out, kind = repair_edges.fix_page(arr)
-              save(out, f"docs/tuned_{tag}.png")
-              save(crop_sheet(arr, out), f"docs/edges_{tag}_before_after.png")
-              g0 = arr.astype(np.float32).mean(axis=2); g1 = out.astype(np.float32).mean(axis=2)
-              f6 = lambda g: int((np.concatenate([g[:6,:].ravel(),g[-6:,:].ravel(),g[:,:6].ravel(),g[:,-6:].ravel()])<120).sum())
-              f40 = lambda g: int((np.concatenate([g[:40,:].ravel(),g[-40:,:].ravel(),g[:,:40].ravel(),g[:,-40:].ravel()])<120).sum())
-              print(f"page {pno} {tag}: border6 {f6(g0)}->{f6(g1)} border40 {f40(g0)}->{f40(g1)} interior {int((g0[60:-60,60:-60]<120).sum())}->{int((g1[60:-60,60:-60]<120).sum())}")
+              best = None
+              for tol in (25, 40, 60, 90):
+                  os.environ["ART_TOL"] = str(tol)
+                  importlib.reload(repair_edges)
+                  out, kind = repair_edges.fix_page(arr)
+                  g0 = arr.astype(np.float32).mean(axis=2); g1 = out.astype(np.float32).mean(axis=2)
+                  i0 = int((g0[60:-60,60:-60]<120).sum()); i1 = int((g1[60:-60,60:-60]<120).sum())
+                  print(f"  {tag} tol={tol:2d}: border6 {f6(g0)}->{f6(g1):4d} border40 {f40(g0)}->{f40(g1):6d} interior {i0}->{i1} delta={i1-i0}")
+                  save(crop_sheet(arr, out), f"docs/edges_{tag}_tol{tol}.png")
+                  save(out, f"docs/tuned_{tag}_tol{tol}.png")
           d.close()
           PY
       - name: Commit

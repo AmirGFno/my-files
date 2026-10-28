@@ -40,7 +40,7 @@ ART_MAXT = int(os.environ.get("ART_MAXT", 140))
 # hard cap: on cover pages a dark run that hugs the border is scan band as long
 # as it is no deeper than this; artwork that runs deeper (a leg, a big block)
 # starts beyond the cap and is left alone.
-ART_CAP = int(os.environ.get("ART_CAP", 140))
+ART_CAP = int(os.environ.get("ART_CAP", 0))
 SLIVBAND, MAXSLIV = 30, 22
 DARKMAX, SATMAX, NEARB, FRACPIX = 140, 50, 90, 0.04
 
@@ -392,7 +392,8 @@ def fix_page(arr):
         out, _ = border_blocks(out, fill, near=80, frac=0.03)
         out, _ = band_consensus(out, fill, darkmax=ART_DARKMAX,
                                 satmax=ART_SATMAX, tol=ART_TOL, maxT=ART_MAXT)
-        out, _ = cap_strip(out, fill, cap=ART_CAP, darkmax=ART_DARKMAX)
+        if ART_CAP > 0:
+            out, _ = cap_strip(out, fill, cap=ART_CAP, darkmax=ART_DARKMAX)
         out, _ = frame_clean(out, fill, darkmax=150)
         kind = "art"
     return out, kind
