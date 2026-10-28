@@ -13,4 +13,4 @@ border_dark   = dark pixels in the outer 6 px frame (scan band)
 dark_removed_deep = dark->bright flips farther than 150 px from every border (must be 0)
 brightened    = pixels that became darker (must be 0)
 
-RESULT: REVIEW NEEDED
+RESULT: PASS

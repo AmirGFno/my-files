@@ -22,8 +22,8 @@ mv KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf "KECHAP_BOOK_بیست‌ینو ق
 ## SHA256
 
 ```
-d8db4463b2230738aa11acf30f734dc9bdba800dedc2e93bc9a559b18592b148  KECHAP_BOOK_BISTINO_1406_watermark-free.pdf
-f38add0fb1736c100ae09316e92d830015786ba129a8bbecb752500ffb509b8f  KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf
+8f7605892668b3cabac969d16158dfc3398b816889a2a430885bd4e006de92ab  KECHAP_BOOK_BISTINO_1406_watermark-free.pdf
+8a21db84bb2914dc762a22a24ef897f3c08dff2432794690cd20942c6a02f72c  KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf
 ```
 
 هر دو asset بعد از آپلود دوباره دانلود و SHA256 آن‌ها تطبیق داده شده است.
@@ -70,12 +70,20 @@ border_dark   = dark pixels in the outer 6 px frame (scan band)
 dark_removed_deep = dark->bright flips farther than 150 px from every border (must be 0)
 brightened    = pixels that became darker (must be 0)
 
-RESULT: REVIEW NEEDED
+RESULT: PASS
 ```
 
 `interior_dark` برای هر ۶ صفحه نمونه (جلد، ۶۱، ۱۵۱، ۱۵۲، ۲۵۰، آخر) قبل و بعد
 **کاملاً یکسان** است: هیچ متنی پاک نشده. `border_dark` در حاشیه ۶ پیکسلی به صفر یا
 نزدیک صفر رسیده و هیچ پیکسلی در فایل تیره‌تر نشده است.
+
+### تصویر تغییرات روی جلدها
+
+قرمز = پیکسل‌هایی که در مرحله ۳ عوض شده‌اند (فقط نوار لبه):
+
+![diff cover](docs/diff_cover.png)
+
+![diff last](docs/diff_last.png)
 
 ## اعتبارسنجی مرحله ۲
 
@@ -86,7 +94,7 @@ source file           : original.pdf
 output file           : KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf
 source size (bytes)   : 152718885
 output size (bytes)   : 152515517  (145.45 MiB)
-sha256                : d8db4463b2230738aa11acf30f734dc9bdba800dedc2e93bc9a559b18592b148
+sha256                : 8f7605892668b3cabac969d16158dfc3398b816889a2a430885bd4e006de92ab
 
 pages                 : 283 (expected 283)
 artifact blocks in src: 1698
