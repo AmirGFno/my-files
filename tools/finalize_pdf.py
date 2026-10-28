@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
-"""Stage 4 — final polish.
+"""Stage 4 — final build.
 
-  1. white bar over the right-hand margin strip where the @KECHAP_BOOK
-     watermark band used to sit (from page BAR_FROM on).
-  2. bolder print: black/white level stretch + gamma, so letters read darker
-     while the paper stays paper.
-  3. PDF below the 100 MB GitHub limit: pages are stored as JPEG (grey for
-     paper pages, RGB where colour matters) and the quality is lowered
-     automatically until the whole file fits the budget.
+  1. white bar over the right margin strip that carries the vertical
+     @KECHAP_BOOK watermark band (from page BAR_FROM on). The bar never covers
+     printed ink: if a page has text in the strip, the bar starts after it.
+  2. bolder print: black/white level stretch + gamma so letters read darker
+     while paper stays paper.
+  3. PDF below the 100 MB GitHub limit: every scan is re-encoded as JPEG (colour
+     kept when it fits the budget) and the quality is lowered until the whole
+     file fits.
 
-Resolution and geometry never change (no re-render, no resampling); only the
-codec and the tone curve.
+Geometry and resolution never change: pixels stay 1:1, only codec + tone
+curve. Nothing is re-rendered by a PDF rasteriser.
 
 Usage: finalize_pdf.py SRC.pdf OUT.pdf [report.txt]
-Env:   BAR_FROM=4 BAR_START_PT=555 BUDGET_MB=95 Q_TOP=86 Q_BOTTOM=62
+Env:   BAR_FROM=4  BAR_START_PT=558  BUDGET_MB=96  Q_TOP=86  Q_BOTTOM=64
 """
 import hashlib
 import os
@@ -28,97 +29,32 @@ OUT = sys.argv[2]
 REPORT = sys.argv[3] if len(sys.argv) > 3 else "final_report.txt"
 
 BAR_FROM = int(os.environ.get("BAR_FROM", 4))
-BAR_START_PT = float(os.environ.get("BAR_START_PT", 555.0))
-BUDGET = float(os.environ.get("BUDGET_MB", 95)) * 1048576
+BAR_START_PT = float(os.environ.get("BAR_START_PT", 560.0))
+BUDGET = float(os.environ.get("BUDGET_MB", 96)) * 1048576
 Q_TOP = int(os.environ.get("Q_TOP", 86))
-Q_BOTTOM = int(os.environ.get("Q_BOTTOM", 62))
-OVERHEAD = 1 * 1048576          # xref table, content streams, fonts: none left
+Q_BOTTOM = int(os.environ.get("Q_BOTTOM", 64))
+Q_STEP = int(os.environ.get("Q_STEP", 4))
+OVERHEAD = 1 * 1048576
 
-BP, WP, GAMMA = 26.0, 238.0, 1.28         # bold-print curve (paper pages)
-BP_C, WP_C, GAMMA_C = 10.0, 246.0, 1.06   # gentle curve for colour pages
+BP, WP, GAMMA = 26.0, 238.0, 1.28          # bold curve for paper pages
+BP_C, WP_C, GAMMA_C = 10.0, 246.0, 1.06    # gentle curve for colour pages
 INK = 120
-COLOR_SAT = 45                            # saturation that counts as "colour"
-COLOR_SHARE = 0.004                       # share of pixels that keeps RGB
+COLOUR_SAT = 40
+COLOUR_SHARE = 0.002
+LINE_FRACTION = 0.80        # a column this "inked" over the full height = line
+LINE_MAX_WIDTH = 8
 RENDER_PAGES = (4, 151, 283)
 
 
+# ------------------------------------------------------------------ pdf utils
 def image_xref(doc, page):
     imgs = [i for i in page.get_images(full=True) if i[7] == "I0"]
     imgs = imgs or page.get_images(full=True)
     return imgs[0][0] if imgs else None
 
 
-def decode(doc, xref):
-    pm = pymupdf.Pixmap(doc, xref)
-    if pm.colorspace is None or pm.colorspace.n != 3:
-        pm = pymupdf.Pixmap(pymupdf.csRGB, pm)
-    return np.frombuffer(pm.samples, np.uint8).reshape(pm.height, pm.width, 3)
-
-
-def page_width_pt(doc, page):
-    s = page.read_contents()
-    m = re.search(rb"q\s+([-\d\.]+)\s+[-\d\.]+\s+[-\d\.]+\s+[-\d\.]+\s+"
-                  rb"[-\d\.]+\s+[-\d\.]+\s+cm", s)
-    return abs(float(m.group(1))) if m else page.rect.width
-
-
-def analyse(arr):
-    """(is_colour_page, has_colour_ink, bar_x0_px) for one scan"""
-    g = arr.astype(np.float32).mean(axis=2)
-    art = float((g > 215).mean()) < 0.5
-    sat = arr.max(axis=2).astype(np.int16) - arr.min(axis=2).astype(np.int16)
-    colorful = float(((sat > COLOR_SAT) & (g < 245)).mean()) > COLOR_SHARE
-    return art, colorful
-
-
-def bolden(arr, art):
-    a = arr.astype(np.float32)
-    if art:
-        x = np.clip((a - BP_C) / (WP_C - BP_C), 0, 1) ** GAMMA_C
-        return (x * 255.0 + 0.5).astype(np.uint8)
-    g = a.mean(axis=2)
-    x = np.clip((g - BP) / (WP - BP), 0, 1) ** GAMMA
-    return (x * 255.0 + 0.5).astype(np.uint8)
-
-
-def jpeg(plane, quality):
-    if plane.ndim == 2:
-        pm = pymupdf.Pixmap(pymupdf.csGRAY, plane.shape[1], plane.shape[0],
-                            np.ascontiguousarray(plane).tobytes(), 0)
-    else:
-        pm = pymupdf.Pixmap(pymupdf.csRGB, plane.shape[1], plane.shape[0],
-                            np.ascontiguousarray(plane).tobytes(), 0)
-    return pm.tobytes("jpeg", jpg_quality=quality)
-
-
-def build_plane(arr, bar_x0, art, keep_colour):
-    out = bolden(arr, art)
-    if bar_x0:
-        out[:, bar_x0:] = 255
-    if not keep_colour:
-        return out if out.ndim == 2 else out.mean(axis=2).astype(np.uint8)
-    return out
-
-
-def write_image(doc, xref, data, grey, w, h):
-    doc.update_stream(xref, data, compress=False)
-    doc.xref_set_key(xref, "Filter", "/DCTDecode")
-    doc.xref_set_key(xref, "ColorSpace", "/DeviceGray" if grey else "/DeviceRGB")
-    doc.xref_set_key(xref, "BitsPerComponent", "8")
-    doc.xref_set_key(xref, "Width", str(w))
-    doc.xref_set_key(xref, "Height", str(h))
-    for key in ("DecodeParms", "SMask", "Mask", "Decode"):
-        doc.xref_set_key(xref, key, "null")
-
-
 def unshare(doc):
-    """give every page its own copy of its scan image
-
-    Some PDFs point several pages at one image object (blank or identical
-    scans). Rewriting such a shared stream once per page would leave only the
-    last edit visible, so duplicate objects are cloned and the page resources
-    are repointed.
-    """
+    """give every page its own copy of a shared scan object"""
     seen, cloned = set(), 0
     for page in doc:
         xref = image_xref(doc, page)
@@ -136,9 +72,99 @@ def unshare(doc):
     return cloned
 
 
-def plan(doc):
-    """collect per-page metadata once"""
-    meta = []
+def decode(doc, xref):
+    pm = pymupdf.Pixmap(doc, xref)
+    if pm.colorspace is None or pm.colorspace.n != 3:
+        pm = pymupdf.Pixmap(pymupdf.csRGB, pm)
+    return np.frombuffer(pm.samples, np.uint8).reshape(pm.height, pm.width, 3)
+
+
+def page_width_pt(page):
+    s = page.read_contents()
+    m = re.search(rb"q\s+([-\d\.]+)\s+[-\d\.]+\s+[-\d\.]+\s+[-\d\.]+\s+"
+                  rb"[-\d\.]+\s+[-\d\.]+\s+cm", s)
+    return abs(float(m.group(1))) if m else page.rect.width
+
+
+def jpeg(plane, quality):
+    if plane.ndim == 2:
+        pm = pymupdf.Pixmap(pymupdf.csGRAY, plane.shape[1], plane.shape[0],
+                            np.ascontiguousarray(plane).tobytes(), 0)
+    else:
+        pm = pymupdf.Pixmap(pymupdf.csRGB, plane.shape[1], plane.shape[0],
+                            np.ascontiguousarray(plane).tobytes(), 0)
+    return pm.tobytes("jpeg", jpg_quality=quality)
+
+
+def write_image(doc, xref, data, grey, w, h):
+    doc.update_stream(xref, data, compress=False)
+    doc.xref_set_key(xref, "Filter", "/DCTDecode")
+    doc.xref_set_key(xref, "ColorSpace", "/DeviceGray" if grey else "/DeviceRGB")
+    doc.xref_set_key(xref, "BitsPerComponent", "8")
+    doc.xref_set_key(xref, "Width", str(w))
+    doc.xref_set_key(xref, "Height", str(h))
+    for key in ("DecodeParms", "SMask", "Mask", "Decode"):
+        doc.xref_set_key(xref, key, "null")
+
+
+# --------------------------------------------------------------- image logic
+def bolden(arr, colour_page):
+    a = arr.astype(np.float32)
+    if colour_page:
+        x = np.clip((a - BP_C) / (WP_C - BP_C), 0, 1) ** GAMMA_C
+        return (x * 255.0 + 0.5).astype(np.uint8)
+    g = a.mean(axis=2)
+    x = np.clip((g - BP) / (WP - BP), 0, 1) ** GAMMA
+    return (x * 255.0 + 0.5).astype(np.uint8)
+
+
+def bar_start_px(plane_gray, cand):
+    """x where the white bar may start without eating printed ink"""
+    W = plane_gray.shape[1]
+    if cand >= W - 2:
+        return 0
+    ink = plane_gray[:, cand:] < 140
+    if not ink.any():
+        return cand
+    col_frac = ink.mean(axis=0)
+    solid = col_frac > LINE_FRACTION
+    # grow the solid line runs and mask them out
+    real = ~solid
+    i = 0
+    n = len(solid)
+    while i < n:
+        if solid[i]:
+            j = i
+            while j < n and solid[j]:
+                j += 1
+            if j - i <= LINE_MAX_WIDTH:
+                real[i:j] = False        # thin vertical line: safe to whiten
+            i = j
+        else:
+            i += 1
+    if not real.any():
+        return cand
+    x = cand + int(np.nonzero(real)[0].max()) + 3
+    return x if x < W - 3 else 0
+
+
+def build_plane(arr, x0, colour_page, keep_colour):
+    out = bolden(arr, colour_page)
+    if x0:
+        out[:, x0:] = 255
+    if keep_colour:
+        return out
+    return out.mean(axis=2).astype(np.uint8) if out.ndim == 3 else out
+
+
+def main():
+    doc = pymupdf.open(SRC)
+    total = doc.page_count
+    cloned = unshare(doc)
+    if cloned:
+        print(f"unshared {cloned} shared scan objects", flush=True)
+
+    pages = []
     for page in doc:
         xref = image_xref(doc, page)
         if xref is None:
@@ -146,81 +172,62 @@ def plan(doc):
         w = int(doc.xref_get_key(xref, "Width")[1])
         h = int(doc.xref_get_key(xref, "Height")[1])
         arr = decode(doc, xref)
-        art, colourful = analyse(arr)
+        g = arr.astype(np.float32).mean(axis=2)
+        colour_page = float((g > 215).mean()) < 0.5
+        sat = arr.max(axis=2).astype(np.int16) - arr.min(axis=2).astype(np.int16)
+        has_colour = float(((sat > COLOUR_SAT) & (g < 245)).mean()) > COLOUR_SHARE
         x0 = 0
-        if page.number + 1 >= BAR_FROM:
-            dw = page_width_pt(doc, page)
-            cand = int(round(BAR_START_PT / dw * w))
-            cand = max(0, min(w - 2, cand))
-            g = arr.astype(np.float32).mean(axis=2)
-            sat = arr.max(axis=2).astype(np.int16) - arr.min(axis=2).astype(np.int16)
-            if art:
-                # a cover: only strip the margin when no artwork lives there
-                neutral_dark = ((g[:, cand:] < 150) & (sat[:, cand:] < 60))
-                if float(neutral_dark.mean()) < 0.02:
-                    x0 = cand
-            else:
-                # paper page: keep any printed ink that reaches into the strip
-                ink = (g[:, cand:] < INK)
-                if ink.any():
-                    cols = np.nonzero(ink.any(axis=0))[0]
-                    right = cand + int(cols.min())
-                    x0 = max(cand, right - 2)
-                else:
-                    x0 = cand
-        meta.append({"page": page.number + 1, "xref": xref, "w": w, "h": h,
-                     "art": art, "colour": colourful, "x0": x0})
-    return meta
+        if page.number + 1 >= BAR_FROM and not colour_page:
+            cand = int(round(BAR_START_PT / page_width_pt(page) * w))
+            x0 = bar_start_px(g, min(max(cand, 0), w - 3))
+        pages.append({"no": page.number + 1, "xref": xref, "w": w, "h": h,
+                      "colour_page": colour_page, "has_colour": has_colour,
+                      "x0": x0})
+        if len(pages) % 60 == 0:
+            print(f"  prepared {len(pages)} pages", flush=True)
 
+    n_bar = sum(1 for p in pages if p["x0"])
+    n_col = sum(1 for p in pages if p["has_colour"])
+    print(f"pages={total} with_image={len(pages)} bar_pages={n_bar} "
+          f"colour_pages={n_col}", flush=True)
 
-def measure(doc, meta, q, preserve_colour):
-    total = 0
-    for m in meta:
-        arr = decode(doc, m["xref"])
-        keep = preserve_colour and m["colour"]
-        plane = build_plane(arr, m["x0"], m["art"], keep)
-        total += len(jpeg(plane, q))
-    return total
+    # ---- choose quality: one pass, all candidates at once ------------------
+    candidates = [(True, q) for q in range(Q_TOP, Q_BOTTOM - 1, -Q_STEP)]
+    candidates += [(False, q) for q in range(Q_TOP, Q_BOTTOM - 4, -Q_STEP)]
+    totals = {c: 0 for c in candidates}
+    for i, p in enumerate(pages):
+        arr = decode(doc, p["xref"])          # decoded once, then discarded
+        for keep_colour, q in candidates:
+            plane = build_plane(arr, p["x0"], p["colour_page"],
+                                keep_colour and p["has_colour"])
+            totals[(keep_colour, q)] += len(jpeg(plane, q))
+        del arr
+        if i % 40 == 0:
+            print(f"  measuring {i + 1}/{len(pages)}", flush=True)
 
-
-def main():
-    doc = pymupdf.open(SRC)
-    total_pages = doc.page_count
-    cloned = unshare(doc)
-    if cloned:
-        print(f"unshared {cloned} shared scan objects", flush=True)
-    meta = plan(doc)
-    print(f"pages={total_pages} images={len(meta)}", flush=True)
-    print("bar pages:", sum(1 for m in meta if m["x0"]), "| colour pages:",
-          sum(1 for m in meta if m["colour"]), flush=True)
-
-    # ---- pick a codec plan that fits the budget ---------------------------
-    plans = [(True, q) for q in range(Q_TOP, Q_BOTTOM - 1, -4)]
-    plans += [(False, q) for q in range(Q_TOP, Q_BOTTOM - 5, -4)]
     chosen = None
-    for preserve, q in plans:
-        est = measure(doc, meta, q, preserve) + OVERHEAD
-        print(f"  plan colour={preserve} q={q}: {est / 1048576:.1f} MiB",
-              flush=True)
+    for c in candidates:
+        est = totals[c] + OVERHEAD
+        print(f"  colour={c[0]} q={c[1]}: {est / 1048576:.1f} MiB", flush=True)
         if est <= BUDGET:
-            chosen = (preserve, q, est)
+            chosen = c
             break
     if chosen is None:
-        preserve, q = False, Q_BOTTOM - 4
-        chosen = (preserve, q, measure(doc, meta, q, preserve) + OVERHEAD)
+        chosen = candidates[-1]
         print("  WARNING: budget not reached", flush=True)
-    preserve, q, est = chosen
-    print(f"chosen: colour={preserve} q={q} est={est / 1048576:.1f} MiB",
-          flush=True)
+    keep_colour, quality = chosen
+    print(f"chosen: colour={keep_colour} q={quality}", flush=True)
 
     # ---- write ------------------------------------------------------------
-    for m in meta:
-        arr = decode(doc, m["xref"])
-        keep = preserve and m["colour"]
-        plane = build_plane(arr, m["x0"], m["art"], keep)
-        write_image(doc, m["xref"], jpeg(plane, q), not keep, m["w"], m["h"])
-        if m["page"] % 50 == 0:
-            print(f"  wrote page {m['page']}", flush=True)
+    for i, p in enumerate(pages):
+        arr = decode(doc, p["xref"])
+        plane = build_plane(arr, p["x0"], p["colour_page"],
+                            keep_colour and p["has_colour"])
+        write_image(doc, p["xref"], jpeg(plane, quality), not keep_colour or
+                    not p["has_colour"], p["w"], p["h"])
+        del arr, plane
+        if p["no"] % 50 == 0:
+            print(f"  wrote page {p['no']}", flush=True)
 
     doc.save(OUT, garbage=4, deflate=True)
     doc.close()
@@ -230,34 +237,36 @@ def main():
     src = pymupdf.open(SRC)
     size = os.path.getsize(OUT)
 
-    def image_of(d, pno):
+    def img(d, pno):
         page = d[pno - 1]
         return decode(d, image_xref(d, page))
 
     bar_rows, bar_bad = [], []
-    for m in meta:
-        if not m["x0"]:
+    for p in pages:
+        if not p["x0"]:
             continue
-        g = image_of(chk, m["page"]).astype(np.float32).mean(axis=2)
-        seg = g[:, m["x0"]:]
+        g = img(chk, p["no"]).astype(np.float32).mean(axis=2)
+        seg = g[:, p["x0"]:]
         dark = float((seg < 200).mean())
-        bar_rows.append((m["page"], m["x0"], float(seg.min()), dark))
-        if dark > 0.001 or seg.min() < 180:
-            bar_bad.append((m["page"], round(dark, 5), float(seg.min())))
+        bar_rows.append((p["no"], p["x0"], float(seg.min()), dark))
+        if dark > 0.002 or seg.min() < 170:
+            bar_bad.append((p["no"], round(dark, 5), float(seg.min())))
 
-    samples = [p for p in (1, 61, 151, 250, 283) if p <= total_pages]
+    samples = [p for p in (1, 61, 151, 250, 283) if p <= total]
     ink_rows = []
     for pno in samples:
         for label, d in (("before", src), ("after", chk)):
-            g = image_of(d, pno).astype(np.float32).mean(axis=2)
+            g = img(d, pno).astype(np.float32).mean(axis=2)
             ink = g < INK
-            mean_ink = float(g[ink].mean()) if ink.any() else 255.0
-            ink_rows.append((pno, label, float(ink.mean()),
-                             float((g < 190).mean()), mean_ink))
+            ink_rows.append((pno, label,
+                             float(ink.mean()),
+                             float((g < 190).mean()),
+                             float(g[ink].mean()) if ink.any() else 255.0))
 
     for pno in RENDER_PAGES:
         if pno <= chk.page_count:
             chk[pno - 1].get_pixmap(dpi=90).save(f"final_p{pno}.png")
+
     pages_after = chk.page_count
     chk.close()
     src.close()
@@ -268,7 +277,7 @@ def main():
             sha.update(chunk)
     digest = sha.hexdigest()
 
-    ok = size < 100 * 1048576 and pages_after == total_pages and not bar_bad
+    ok = size < 100 * 1048576 and pages_after == total and not bar_bad
     lines = [
         "FINAL REPORT (stage 4)",
         "======================",
@@ -277,21 +286,21 @@ def main():
         f"size            : {size:,} bytes ({size / 1048576:.2f} MiB)",
         f"under 100 MiB   : {'YES' if size < 100 * 1048576 else 'NO'}",
         f"pages           : {pages_after}",
-        f"codec           : JPEG, colour={preserve}, q={q}",
+        f"codec           : JPEG, colour_kept={keep_colour}, q={quality}",
         f"sha256          : {digest}",
         "",
-        f"white bar pages : {len(bar_rows)} (from page {BAR_FROM}, "
-        f"start {BAR_START_PT} pt)",
+        f"white bar       : {len(bar_rows)} paper pages from page {BAR_FROM} "
+        f"(start {BAR_START_PT} pt); colour pages skipped (artwork would be cut)",
         f"bar fully white : {'YES' if not bar_bad else 'NO'}",
     ]
     for pno, x0, mn, dark in bar_rows[:5]:
         lines.append(f"  page {pno:>3} x0={x0:>4} min_gray={mn:5.0f} "
                      f"dark_frac={dark:.5f}")
     if bar_bad:
-        lines.append(f"  pages with ink in the strip: {bar_bad[:8]}")
+        lines.append(f"  pages with ink in the bar: {bar_bad[:8]}")
     lines += ["",
-              "ink metrics — coverage_120 grows and mean_ink falls when the",
-              "print gets bolder (measurement on the embedded scan):",
+              "ink metrics on the embedded scan (bolder => cov grows, "
+              "mean_ink falls):",
               f"  {'page':>4} {'when':>6} {'cov<120':>9} {'cov<190':>9} "
               f"{'mean_ink':>9}"]
     for pno, label, cov, cov190, mean_ink in ink_rows:

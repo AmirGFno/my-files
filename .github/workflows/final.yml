@@ -76,8 +76,10 @@ jobs:
       - name: Stage 4 - white bar, bolder print, <100 MB
         env:
           BAR_FROM: "4"
-          BAR_START_PT: ${{ vars.BAR_START_PT || 555 }}
+          BAR_START_PT: "560"
           BUDGET_MB: "96"
+          Q_TOP: "86"
+          Q_BOTTOM: "64"
         run: |
           F="KECHAP_BOOK_بیست‌ینو قریشی 1406 (نسخه نهایی).pdf"
           time python tools/finalize_pdf.py "$STAGE3" "$F" final_report.txt 2>&1 | tee ci/final.log
