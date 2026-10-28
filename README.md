@@ -3,20 +3,28 @@
 | مشخصه | مقدار |
 |---|---|
 | نام فایل | `KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf` |
+| نام asset در Releases | `KECHAP_BOOK_BISTINO_1406_watermark-free.pdf` |
 | تعداد صفحات | 283 |
 | حجم | 152,515,517 بایت (145.45 مگابایت) |
-| SHA256 | `ca31435b2f2ec101295486f9f5488c81f9cfaf7cd381f721cb3b205d0d7c226c` |
+| SHA256 | `040adc260400c50df3bdb2573887ae6c5af41f66737dee5c7bc4ee57d411c611` |
 | فرمت | PDF 1.7 اسکن‌شده (NAPS2 / PDFsharp) |
 
 ## دانلود
 
 فایل بزرگ‌تر از سقف ۱۰۰ مگابایتی گیت‌هاب است، بنابراین به‌صورت asset ریلیز منتشر شده:
 
-**https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_.1406.pdf**
+**https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_watermark-free.pdf**
 
 صفحه ریلیز: https://github.com/AmirGFno/my-files/releases/tag/v1
 
 > فایل در یک ریپوی Private است؛ برای دانلود باید با حساب GitHub خود وارد شده باشید.
+
+نام asset در گیت‌هاب ASCII است (گیت‌هاب نام‌های غیرانگلیسی را حذف می‌کند). بعد از دانلود،
+برای برگرداندن نام اصلی:
+
+```bash
+mv "KECHAP_BOOK_BISTINO_1406_watermark-free.pdf" "KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf"
+```
 
 ## چه کاری انجام شد
 
@@ -40,7 +48,7 @@ source file           : original.pdf
 output file           : KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf
 source size (bytes)   : 152718885
 output size (bytes)   : 152515517  (145.45 MiB)
-sha256                : ca31435b2f2ec101295486f9f5488c81f9cfaf7cd381f721cb3b205d0d7c226c
+sha256                : 040adc260400c50df3bdb2573887ae6c5af41f66737dee5c7bc4ee57d411c611
 
 pages                 : 283 (expected 283)
 artifact blocks in src: 1698
