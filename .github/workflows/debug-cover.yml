@@ -1,0 +1,52 @@
+name: debug-cover-edges
+on:
+  push:
+    branches: [arena/4a21732a-my-files]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download source
+        run: curl -sSL -A "Mozilla/5.0" --max-time 600 -o original.pdf "https://cf.linkulu.com/dl/6ae1aa03c8b58d63b66d7e6d"
+      - name: Deps
+        run: pip install --quiet pymupdf numpy scipy
+      - name: Stage 2 (fast)
+        run: python tools/strip_watermarks.py original.pdf "KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf" v.txt
+      - name: Analyze cover edges
+        run: |
+          python tools/debug_art_edges.py 2>&1 | tee ci_debug_cover.txt
+          python - <<'PY'
+          import numpy as np, pymupdf
+          d = pymupdf.open("KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf")
+          for pno, tag in ((1, "c1"), (283, "c283")):
+              p = d[pno-1]
+              x = [i for i in p.get_images(full=True) if i[7] == "I0"][0][0]
+              w = int(d.xref_get_key(x, "Width")[1]); h = int(d.xref_get_key(x, "Height")[1])
+              a = np.frombuffer(d.xref_stream(x), np.uint8).reshape(h, w, 3).copy()
+              # 70 px strips, 4x zoomed, stacked: left | right | top | bottom
+              strips = [a[:, :70], a[:, -70:], a[:70, :].transpose(1,0,2)[:, :1].repeat(70,1), a[-70:, :].transpose(1,0,2)[:,:1].repeat(70,1)]
+              W = sum(s.shape[1] for s in strips)
+              H = max(s.shape[0] for s in strips)
+              canvas = np.full((H, W, 3), 128, np.uint8)
+              x0 = 0
+              for s in strips:
+                  canvas[:s.shape[0], x0:x0+s.shape[1]] = s
+                  x0 += s.shape[1]
+              pm = pymupdf.Pixmap(pymupdf.csRGB, canvas.shape[1], canvas.shape[0], canvas.tobytes(), 0)
+              pm.save(f"docs/debug_{tag}_strips.png")
+              print("saved", tag)
+          PY
+      - name: Commit diagnostics
+        run: |
+          mkdir -p docs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp ci_debug_cover.txt docs/ 2>/dev/null || true
+          git add docs ci_debug_cover.txt
+          git commit -m "debug: cover edge diagnostics" || echo nothing
+          git push || echo skipped
