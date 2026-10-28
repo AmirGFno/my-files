@@ -1,11 +1,11 @@
-[0;93m2026-10-28 08:53:47.613733284 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+[0;93m2026-10-28 09:05:59.309783266 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
 pages: before=283 after=283
- page interior_dark before      after  delta | border_dark before    after
-    1               177122     175734  -1388 |              13106      784   TEXT CHANGED
-   61                55614      55614      0 |              17016      726   text intact
-  151                42390      42390      0 |               9510        0   text intact
-  152                32032      32032      0 |               7766        0   text intact
-  250                80182      80182      0 |               8021        0   text intact
-  283               145508     145508      0 |              22703     1907   text intact
+ page          interior_dark      border_dark  dark_removed_deep  brightened  verdict
+    1     177122 -> 175711      13106 -> 153                     0           0  CHECK
+   61      55614 -> 55614       17016 -> 8                       0           0  OK
+  151      42390 -> 42390        9510 -> 0                       0           0  OK
+  152      32032 -> 32032        7766 -> 0                       0           0  OK
+  250      80182 -> 80182        8021 -> 0                       0           0  OK
+  283     145508 -> 145508      22703 -> 131                     0           0  OK
 
 RESULT: REVIEW NEEDED

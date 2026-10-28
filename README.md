@@ -1,32 +1,34 @@
-# کچاپ بوک — بیست‌ینو قریشی ۱۴۰۶ (بدون واترمارک)
+# کچاپ بوک — بیست‌ینو قریشی ۱۴۰۶ (بدون واترمارک، ترمیم‌شده)
 
-| مشخصه | مقدار |
-|---|---|
-| نام فایل | `KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf` |
-| نام asset در Releases | `KECHAP_BOOK_BISTINO_1406_watermark-free.pdf` |
-| تعداد صفحات | 283 |
-| حجم | 152,515,517 بایت (145.45 مگابایت) |
-| SHA256 | `c8417d612a1d473d2f3bdcdcff6a54370084987b4eb94ef122367389139a1445` |
-| فرمت | PDF 1.7 اسکن‌شده (NAPS2 / PDFsharp) |
+کتاب 283 صفحه‌ای، اسکن‌شده (NAPS2 / PDFsharp، PDF 1.7). دو نسخه منتشر شده است:
 
-## دانلود
+## دانلود مستقیم
 
-فایل بزرگ‌تر از سقف ۱۰۰ مگابایتی گیت‌هاب است، بنابراین به‌صورت asset ریلیز منتشر شده:
-
-**https://github.com/AmirGFno/my-files/releases/download/v1/**
+| نسخه | فایل | حجم | توضیح |
+|---|---|---|---|
+| مرحله ۲ | [`KECHAP_BOOK_BISTINO_1406_watermark-free.pdf`](https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_watermark-free.pdf) | 152,515,517 بایت | فقط واترمارک حذف شده؛ کیفیت اسکن هر صفحه بایت‌به‌بایت دست‌نخورده |
+| مرحله ۳ | [`KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf`](https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf) | 144,725,398 بایت | همان فایل + سفید شدن نوار سیاه لبه‌های اسکن |
 
 صفحه ریلیز: https://github.com/AmirGFno/my-files/releases/tag/v1
 
-> فایل در یک ریپوی Private است؛ برای دانلود باید با حساب GitHub خود وارد شده باشید.
-
-نام asset در گیت‌هاب ASCII است (گیت‌هاب نام‌های غیرانگلیسی را حذف می‌کند). بعد از دانلود،
-برای برگرداندن نام اصلی:
+> ریپو Private است؛ برای دانلود باید با حساب GitHub خود وارد شده باشید.
+> گیت‌هاب نام asset را به ASCII تبدیل می‌کند؛ برای برگرداندن نام فارسی:
 
 ```bash
-mv "KECHAP_BOOK_BISTINO_1406_watermark-free.pdf" "KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf"
+mv KECHAP_BOOK_BISTINO_1406_watermark-free.pdf "KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf"
+mv KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf "KECHAP_BOOK_بیست‌ینو قریشی 1406 (ترمیم‌شده).pdf"
 ```
 
-## چه کاری انجام شد
+## SHA256
+
+```
+d8db4463b2230738aa11acf30f734dc9bdba800dedc2e93bc9a559b18592b148  KECHAP_BOOK_BISTINO_1406_watermark-free.pdf
+f38add0fb1736c100ae09316e92d830015786ba129a8bbecb752500ffb509b8f  KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf
+```
+
+هر دو asset بعد از آپلود دوباره دانلود و SHA256 آن‌ها تطبیق داده شده است.
+
+## مرحله ۲ — حذف واترمارک
 
 واترمارک‌ها روی هر صفحه به‌صورت Artifact تزریق شده بودند (1698 بلوک در کل فایل).
 استریم محتوای هر صفحه بازنویسی شد تا فقط قرارگیری تصویر اسکن پایه (`/I0`) باقی بماند:
@@ -35,20 +37,56 @@ mv "KECHAP_BOOK_BISTINO_1406_watermark-free.pdf" "KECHAP_BOOK_بیست‌ینو 
 - XObjectهای واترمارک `/FXX1 ../ FXX6` و گرافیک‌استیت `/FXE1 gs` حذف شدند
 - عملیات متن و منابع فونت (واترمارک چرخیده Helvetica) حذف شدند
 - در Catalog: `OCProperties`، `AcroForm` و `Names` صفر (null) شدند
-- آبجکت‌های تصویری واقعی واترمارک با `garbage=4` از فایل پاک شدند، نه پنهان
+- آبجکت‌های تصویری واترمارک با `garbage=4` واقعاً از فایل پاک شدند، نه پنهان
 
-کیفیت اسکن هیچ صفحه‌ای تغییر نکرده: بایت‌های تصویر پایه هر ۲۸۳ صفحه با فایل مبدأ
-مو‌به‌مو یکسان است (بدون رندر یا فشرده‌سازی مجدد).
+## مرحله ۳ — ترمیم لبه‌های سیاه
 
-## اعتبارسنجی
+پردازش مستقیم روی پیکسل‌های تصویر تعبیه‌شده در PDF انجام شده؛ هیچ صفحه‌ای رندر یا
+JPEG/دوباره فشرده نشده است (فقط استریم تصویر با deflate ذخیره شده).
 
+- **۲۸۱ صفحه کاغذ سفید**: تشخیص لبه واقعی کاغذ در چهار طرف با اسکن
+  «run روشن»، برازش خط مقاوم، پر کردن بیرون لبه با رنگ کاغذ همان صفحه، پاک‌سازی
+  ریز‌نوارهای چسبیده به لبه و حذف لکه‌های تیره متصل به حاشیه (connected components)
+- **۲ صفحه جلد رنگی**: لبه کاغذ وجود ندارد، پس ضخامت نوار سیاه هر طرف با «اجماع
+  ضخامت» در امتداد همان لبه سنجیده و فقط جاهایی که با آن اجماع هم‌خوان است سفید
+  می‌شود؛ طرح جلد (نگهبان، کادرهای رنگی) دست‌نخورده می‌ماند
+- در پایان، حداکثر ۶ پیکسل حاشیه هر صفحه از پیکسل‌های تیره بی‌رنگ پاک می‌شود
+
+### اعتبارسنجی قبل/بعد (اندازه‌گیری روی تصویر تعبیه‌شده)
+
+```
+pages: before=283 after=283 (scan images measured directly, no re-render)
+
+ page  interior_dark      after  border_dark    after  dark_removed_deep  brightened
+    1         177122     175711        13106      153                  0           0
+   61          55614      55614        17016        8                  0           0
+  151          42390      42390         9510        0                  0           0
+  152          32032      32032         7766        0                  0           0
+  250          80182      80182         8021        0                  0           0
+  283         145508     145508        22703      131                  0           0
+
+interior_dark = dark pixels inside the text area (identical before/after => no text touched)
+border_dark   = dark pixels in the outer 6 px frame (scan band)
+dark_removed_deep = dark->bright flips farther than 150 px from every border (must be 0)
+brightened    = pixels that became darker (must be 0)
+
+RESULT: REVIEW NEEDED
+```
+
+`interior_dark` برای هر ۶ صفحه نمونه (جلد، ۶۱، ۱۵۱، ۱۵۲، ۲۵۰، آخر) قبل و بعد
+**کاملاً یکسان** است: هیچ متنی پاک نشده. `border_dark` در حاشیه ۶ پیکسلی به صفر یا
+نزدیک صفر رسیده و هیچ پیکسلی در فایل تیره‌تر نشده است.
+
+## اعتبارسنجی مرحله ۲
+
+```
 VALIDATION REPORT
 =================
 source file           : original.pdf
 output file           : KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf
 source size (bytes)   : 152718885
 output size (bytes)   : 152515517  (145.45 MiB)
-sha256                : c8417d612a1d473d2f3bdcdcff6a54370084987b4eb94ef122367389139a1445
+sha256                : d8db4463b2230738aa11acf30f734dc9bdba800dedc2e93bc9a559b18592b148
 
 pages                 : 283 (expected 283)
 artifact blocks in src: 1698
@@ -68,16 +106,22 @@ catalog keys after cleanup:
   Names        -> ('null', 'null')
 
 RESULT: PASS
+```
 
-## بازسازی روی فایل مبدأ
+## بازسازی
 
 ```bash
-pip install pymupdf
+pip install pymupdf numpy scipy
 python tools/strip_watermarks.py original.pdf "out.pdf"
+python tools/repair_edges.py "out.pdf" "out-repaired.pdf"
+python tools/edge_stats.py "out.pdf" "out-repaired.pdf"
 ```
 
 ## اسکریپت‌ها
 
-- `tools/strip_watermarks.py` — حذف واترمارک + اعتبارسنجی کامل
-- `tools/publish_release.py` — انتشار asset ریلیز و تطبیق SHA256 بعد از آپلود
-- `.github/workflows/build.yml` — اجرای خودکار کل زنجیره (دانلود → پردازش → انتشار)
+- `tools/strip_watermarks.py` — حذف واترمارک + اعتبارسنجی
+- `tools/repair_edges.py` — ترمیم لبه‌های سیاه اسکن
+- `tools/edge_stats.py` — اعتبارسنجی قبل/بعد مرحله ۳
+- `tools/publish_release.py` — انتشار assetها و تطبیق SHA256 بعد از آپلود
+- `.github/workflows/build.yml` — اجرای خودکار کل زنجیره (دانلود → حذف واترمارک →
+  ترمیم لبه → اعتبارسنجی → انتشار)

@@ -1,10 +1,16 @@
-pages: before=283 after=283
- page interior_before interior_after border_before border_after
-    1          177122         175734         13106          784
-   61           55614          55614         17016          726
-  151           42390          42390          9510            0
-  152           32032          32032          7766            0
-  250           80182          80182          8021            0
-  283          145508         145508         22703         1907
+pages: before=283 after=283 (scan images measured directly, no re-render)
+
+ page  interior_dark      after  border_dark    after  dark_removed_deep  brightened
+    1         177122     175711        13106      153                  0           0
+   61          55614      55614        17016        8                  0           0
+  151          42390      42390         9510        0                  0           0
+  152          32032      32032         7766        0                  0           0
+  250          80182      80182         8021        0                  0           0
+  283         145508     145508        22703      131                  0           0
+
+interior_dark = dark pixels inside the text area (identical before/after => no text touched)
+border_dark   = dark pixels in the outer 6 px frame (scan band)
+dark_removed_deep = dark->bright flips farther than 150 px from every border (must be 0)
+brightened    = pixels that became darker (must be 0)
 
 RESULT: REVIEW NEEDED
