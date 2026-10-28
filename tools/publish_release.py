@@ -83,11 +83,12 @@ else:
               {"name": RELEASE_TITLE, "body": RELEASE_NOTES})
     print("release updated:", rel["id"], flush=True)
 
-# --- optionally drop old assets --------------------------------------------
-if DELETE_OLD:
-    for old in req("GET", f"/repos/{REPO}/releases/{rel['id']}/assets?per_page=100"):
+# --- drop assets that would collide by name (GitHub rejects duplicates) ----
+wanted = {a["name"] for a in assets}
+for old in req("GET", f"/repos/{REPO}/releases/{rel['id']}/assets?per_page=100"):
+    if DELETE_OLD or old["name"] in wanted:
         req("DELETE", f"/repos/{REPO}/releases/assets/{old['id']}")
-        print("deleted old asset:", old["name"], flush=True)
+        print("removed old asset:", old["name"], flush=True)
 
 # --- upload ----------------------------------------------------------------
 for a in assets:
