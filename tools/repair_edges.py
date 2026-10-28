@@ -36,17 +36,12 @@ DARKMAX, SATMAX, NEARB, FRACPIX = 140, 50, 90, 0.04
 
 # cover pages: the scan band is often near-black but slightly colourful, so
 # luminance is the reliable signal; saturation is ignored on purpose.
-ART_DARKMAX = int(os.environ.get("ART_DARKMAX", 110))
+ART_DARKMAX = int(os.environ.get("ART_DARKMAX", 120))
 ART_SATMAX = int(os.environ.get("ART_SATMAX", 255))
-ART_TOL = int(os.environ.get("ART_TOL", 20))
+ART_TOL = int(os.environ.get("ART_TOL", 25))
 ART_MAXT = int(os.environ.get("ART_MAXT", 140))
-# hard cap: on cover pages a dark run that hugs the border is scan band as long
-# as it is no deeper than this; artwork that runs deeper (a leg, a big block)
-# starts beyond the cap and is left alone.
-ART_CAP = int(os.environ.get("ART_CAP", 0))
 # deepest dark run still treated as scan band on a colour page (px)
 ART_MAXRUN = int(os.environ.get("ART_MAXRUN", 90))
-ART_SKIP = int(os.environ.get("ART_SKIP", 45))
 ART_GRAD = int(os.environ.get("ART_GRAD", 60))
 SLIVBAND, MAXSLIV = 30, 22
 def gray(a):
@@ -335,43 +330,6 @@ def edge_run_fill(arr, cap=30, darkmax=ART_DARKMAX, maxrun=ART_MAXT,
                 else:
                     col = np.full(3, 255, np.uint8)
                 v[i, start:end] = col
-    return out, total
-
-
-def cap_strip(arr, fill, cap=140, darkmax=120):
-    """Whiten the contiguous dark run that starts at each border, up to `cap` px.
-
-    This finishes off tapered band remnants that the consensus pass leaves on
-    lines whose thickness deviates from the median. Content that reaches deeper
-    than `cap` (e.g. the guard's leg on the back cover) stops the run and is
-    preserved.
-    """
-    out = arr.copy()
-    dark = gray(out) < darkmax
-    H, W = dark.shape
-    total = 0
-    # left / right
-    L = prefix_len(dark)
-    L = np.minimum(L, cap)
-    for y in np.nonzero(L)[0]:
-        out[y, :L[y]] = fill
-    total += int(L.sum())
-    R = prefix_len(dark[:, ::-1])
-    R = np.minimum(R, cap)
-    for y in np.nonzero(R)[0]:
-        out[y, W - R[y]:] = fill
-    total += int(R.sum())
-    # top / bottom
-    T = prefix_len(dark.T)
-    T = np.minimum(T, cap)
-    for x in np.nonzero(T)[0]:
-        out[:T[x], x] = fill
-    total += int(T.sum())
-    B = prefix_len(dark[::-1, :].T)
-    B = np.minimum(B, cap)
-    for x in np.nonzero(B)[0]:
-        out[H - B[x]:, x] = fill
-    total += int(B.sum())
     return out, total
 
 
