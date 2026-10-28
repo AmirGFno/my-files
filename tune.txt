@@ -1,3 +1,3 @@
-[0;93m2026-10-28 09:27:47.169679492 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
-page 1 cover: border6 13106->106 border40 77944->31770 interior 177122->175581
-page 283 last: border6 22703->1 border40 124333->8648 interior 145508->145508
+[0;93m2026-10-28 09:31:45.789380206 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+page 1 cover: border6 13106->65 border40 77944->24996 interior 177122->173704
+page 283 last: border6 22703->1 border40 124333->5231 interior 145508->142565
