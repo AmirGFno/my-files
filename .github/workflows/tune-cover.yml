@@ -1,7 +1,5 @@
 name: tune-cover-edges
 on:
-  push:
-    branches: [arena/4a21732a-my-files]
   workflow_dispatch:
 permissions:
   contents: write
@@ -17,12 +15,14 @@ jobs:
         run: pip install --quiet pymupdf numpy scipy
       - name: Stage 2
         run: python tools/strip_watermarks.py original.pdf clean.pdf v.txt
-      - name: Compare art variants on the two covers
+      - name: Edge crops before/after
         run: |
           mkdir -p docs
           python - <<'PY' 2>&1 | tee tune.txt
           import os, sys, importlib, numpy as np, pymupdf
           sys.path.insert(0, "tools")
+          os.environ.update(ART_DARKMAX="120", ART_SATMAX="255", ART_TOL="25", ART_MAXT="120")
+          import repair_edges
 
           def load(doc, idx):
               p = doc[idx]
@@ -30,32 +30,41 @@ jobs:
               w = int(doc.xref_get_key(x, "Width")[1]); h = int(doc.xref_get_key(x, "Height")[1])
               return np.frombuffer(doc.xref_stream(x), np.uint8).reshape(h, w, 3).copy(), p
 
+          def save(arr, path):
+              pymupdf.Pixmap(pymupdf.csRGB, arr.shape[1], arr.shape[0],
+                             np.ascontiguousarray(arr).tobytes(), 0).save(path)
+
+          def crop_sheet(before, after, band=130):
+              H, W = before.shape[:2]
+              tiles = [(slice(0,H), slice(0,band)), (slice(0,H), slice(W-band,W)),
+                       (slice(0,band), slice(0,W)), (slice(H-band,H), slice(0,W))]
+              row_b = [before[t] for t in tiles]; row_a = [after[t] for t in tiles]
+              gh = max(r.shape[0] for r in row_b + row_a)
+              gw = sum(r.shape[1] for r in row_b) + 30
+              sheet = np.full((gh*2+16, gw, 3), 255, np.uint8)
+              x0 = 0
+              for rb, ra in zip(row_b, row_a):
+                  sheet[:rb.shape[0], x0:x0+rb.shape[1]] = rb
+                  sheet[gh+16:gh+16+ra.shape[0], x0:x0+ra.shape[1]] = ra
+                  x0 += rb.shape[1] + 10
+              return sheet
+
           d = pymupdf.open("clean.pdf")
-          variants = [(110,255,20,120),(110,255,30,120),(95,255,25,140),(100,60,20,120),(120,255,25,120)]
-          for pno, tag in ((1,"cover"),(283,"last")):
+          for pno, tag in ((1, "cover"), (283, "last")):
               arr, page = load(d, pno-1)
-              g0 = arr.astype(np.float32).mean(axis=2)
-              print(f"\n=== page {pno} {tag} {arr.shape[1]}x{arr.shape[0]}")
-              for dm, sm, tol, mt in variants:
-                  os.environ.update(ART_DARKMAX=str(dm), ART_SATMAX=str(sm), ART_TOL=str(tol), ART_MAXT=str(mt))
-                  import repair_edges
-                  importlib.reload(repair_edges)
-                  out, kind = repair_edges.fix_page(arr)
-                  g1 = out.astype(np.float32).mean(axis=2)
-                  f6 = lambda g: int((np.concatenate([g[:6,:].ravel(),g[-6:,:].ravel(),g[:,:6].ravel(),g[:,-6:].ravel()])<120).sum())
-                  f40 = lambda g: int((np.concatenate([g[:40,:].ravel(),g[-40:,:].ravel(),g[:,:40].ravel(),g[:,-40:].ravel()])<120).sum())
-                  inter0 = int((g0[60:-60,60:-60]<120).sum()); inter1 = int((g1[60:-60,60:-60]<120).sum())
-                  print(f"  dm={dm:3d} sm={sm:3d} tol={tol:2d} maxT={mt:3d} | border6 {f6(g0):6d}->{f6(g1):5d} | border40 {f40(g0):7d}->{f40(g1):6d} | interior {inter0}->{inter1} delta={inter1-inter0}")
-                  if (dm,sm,tol,mt) in ((110,255,20,120),(110,255,30,120)):
-                      pm = pymupdf.Pixmap(pymupdf.csRGB, out.shape[1], out.shape[0], out.tobytes(), 0)
-                      pm.save(f"docs/tune_{tag}_{dm}_{sm}_{tol}.png")
+              out, kind = repair_edges.fix_page(arr)
+              save(out, f"docs/tuned_{tag}.png")
+              save(crop_sheet(arr, out), f"docs/edges_{tag}_before_after.png")
+              g0 = arr.astype(np.float32).mean(axis=2); g1 = out.astype(np.float32).mean(axis=2)
+              f6 = lambda g: int((np.concatenate([g[:6,:].ravel(),g[-6:,:].ravel(),g[:,:6].ravel(),g[:,-6:].ravel()])<120).sum())
+              f40 = lambda g: int((np.concatenate([g[:40,:].ravel(),g[-40:,:].ravel(),g[:,:40].ravel(),g[:,-40:].ravel()])<120).sum())
+              print(f"page {pno} {tag}: border6 {f6(g0)}->{f6(g1)} border40 {f40(g0)}->{f40(g1)} interior {int((g0[60:-60,60:-60]<120).sum())}->{int((g1[60:-60,60:-60]<120).sum())}")
           d.close()
           PY
-          ls docs | head
-      - name: Commit tuning results
+      - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add tune.txt docs
-          git commit -m "debug: cover edge tuning results" || echo nothing
+          git commit -m "debug: cover edge crops" || echo nothing
           git push || echo skipped
