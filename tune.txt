@@ -1,15 +1,3 @@
-[0;93m2026-10-28 09:24:16.560820262 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
-
-=== page 1 cover 1171x1578
-  dm=110 sm=255 tol=20 maxT=120 | border6  13106->  110 | border40   77944-> 31817 | interior 177122->175598 delta=-1524
-  dm=110 sm=255 tol=30 maxT=120 | border6  13106->  110 | border40   77944-> 31817 | interior 177122->175598 delta=-1524
-  dm= 95 sm=255 tol=25 maxT=140 | border6  13106->  153 | border40   77944-> 61959 | interior 177122->177122 delta=0
-  dm=100 sm= 60 tol=20 maxT=120 | border6  13106->  153 | border40   77944-> 61959 | interior 177122->177122 delta=0
-  dm=120 sm=255 tol=25 maxT=120 | border6  13106->  106 | border40   77944-> 31770 | interior 177122->175581 delta=-1541
-
-=== page 283 last 1170x1555
-  dm=110 sm=255 tol=20 maxT=120 | border6  22703->   21 | border40  124333->  9168 | interior 145508->145508 delta=0
-  dm=110 sm=255 tol=30 maxT=120 | border6  22703->   21 | border40  124333->  8107 | interior 145508->145508 delta=0
-  dm= 95 sm=255 tol=25 maxT=140 | border6  22703->  131 | border40  124333-> 11417 | interior 145508->145508 delta=0
-  dm=100 sm= 60 tol=20 maxT=120 | border6  22703->  131 | border40  124333-> 11704 | interior 145508->145508 delta=0
-  dm=120 sm=255 tol=25 maxT=120 | border6  22703->    1 | border40  124333->  8648 | interior 145508->145508 delta=0
+[0;93m2026-10-28 09:27:47.169679492 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+page 1 cover: border6 13106->106 border40 77944->31770 interior 177122->175581
+page 283 last: border6 22703->1 border40 124333->8648 interior 145508->145508
