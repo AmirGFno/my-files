@@ -4,7 +4,7 @@ source file           : original.pdf
 output file           : KECHAP_BOOK_بیست‌ینو قریشی 1406 (بدون واترمارک).pdf
 source size (bytes)   : 152718885
 output size (bytes)   : 152515517  (145.45 MiB)
-sha256                : c2085ceed351ce21d9c7176b03b91d239197b41a2d09033c5c67b27a4fe88a41
+sha256                : 5281b051fde8d5c49dd2c3df18829099065359f5db4b767fd28c151d98a33f83
 
 pages                 : 283 (expected 283)
 artifact blocks in src: 1698
