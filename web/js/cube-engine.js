@@ -190,6 +190,11 @@ const VIEWS = {
 };
 
 const STICKER = 0.472;  // half-size: 0.944 of a cubie, so a ~5% gap like a real cube
+/* one clock for the whole animation. requestAnimationFrame hands over
+   performance.now() timestamps, so mixing in Date.now() would make progress
+   jump to a huge negative number and freeze every turn. */
+const clock = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+
 const LIFT = 0.006;     // stickers sit just above the body so faces never coincide
 const LIGHT = { U: 1.0, F: 0.94, R: 0.84, D: 0.97, B: 0.88, L: 0.78 };
 const DARK = { U: 0.92, F: 0.84, R: 0.72, D: 0.90, B: 0.78, L: 0.66 };
@@ -299,7 +304,7 @@ class CubeView {
     return new Promise((resolve) => {
       this.queue = toks.map((t, i) => ({ tok: t, i, n: toks.length }));
       this._resolve = resolve;
-      this._tick(Date.now());
+      this._tick(clock());
     });
   }
 
@@ -322,9 +327,10 @@ class CubeView {
     this._raf = requestAnimationFrame(this._loop);
   }
 
-  _loop(now) {
+  _loop() {
     if (!this.anim) { this._raf = null; return; }
-    const p = Math.min(1, (now - this.anim.start) / this.anim.dur);
+    const now = clock();
+    const p = Math.max(0, Math.min(1, (now - this.anim.start) / this.anim.dur));
     this.anim.p = p;
     this.draw();
     if (p >= 1) {
@@ -336,7 +342,7 @@ class CubeView {
     }
   }
 
-  _beginMove(item, now = Date.now()) {
+  _beginMove(item, now = clock()) {
     const spec = Cube.spec(item.tok);
     const dur = this.reducedMotion
       ? 1

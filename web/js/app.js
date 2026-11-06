@@ -88,13 +88,17 @@ function cubeFigure({ label, alg, next, view, small = true, maxWidth = 220 }) {
   );
 
   const bar = h('div', { class: 'fig__bar' });
+  const live = h('span', { class: 'fig__live', role: 'status', 'aria-live': 'polite' });
   const playBtn = next ? h('button', {
     class: 'fig__btn fig__btn--play', type: 'button',
     'aria-label': 'اجرای این گام روی مکعب',
     onclick: async () => {
       playBtn.classList.add('is-on');
       playBtn.textContent = 'در حال اجرا…';
+      view3d.onMove = (tok, i, n) => { live.textContent = `حرکت ${faNum(i + 1)} از ${faNum(n)}: ${tok}`; };
       await view3d.play(next, {});
+      view3d.onMove = null;
+      live.textContent = 'گام تمام شد؛ مکعب در وضعیت بعدی است.';
       playBtn.classList.remove('is-on');
       playBtn.textContent = '▶ دوباره';
     },
@@ -105,6 +109,8 @@ function cubeFigure({ label, alg, next, view, small = true, maxWidth = 220 }) {
       view3d.stop();
       view3d.cube = new Cube().apply(alg || '');
       view3d.draw();
+      if (playBtn) playBtn.textContent = '▶ اجرای گام';
+      live.textContent = 'به وضعیت اول برگشت.';
     },
   }, '↺');
 
@@ -146,8 +152,9 @@ function cubeFigure({ label, alg, next, view, small = true, maxWidth = 220 }) {
     onclick: () => openCubeModal({ alg, next, view: currentView, label, speed }),
   }, '⤢ بزرگ');
 
+
   bar.append(...[playBtn, resetBtn, bigBtn].filter(Boolean));
-  holder.append(bar, h('div', { class: 'fig__bar fig__bar--seg' }, speedWrap, viewWrap));
+  holder.append(bar, h('div', { class: 'fig__bar fig__bar--seg' }, speedWrap, viewWrap), live);
   if (next) holder.append(h('figcaption', { dir: 'ltr', class: 'fig__alg' }, next));
   liveViews.push(view3d);
   requestAnimationFrame(() => { view3d.resize(); view3d.draw(); });
