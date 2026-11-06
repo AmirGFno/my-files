@@ -413,16 +413,26 @@ class CubeView {
         // the dark plastic face, slightly bigger than the sticker on it
         const bodyQuad = build(BODY, 0);
         const bodyPts = bodyQuad.map(toScreen);
-        facets.push({
-          pts: bodyPts, kind: 'body',
-          depth: vdot(centroid(bodyQuad), depth),
-          top: [0.115, 0.125, 0.145], bottom: [0.055, 0.06, 0.072],
-        });
+        const edge = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+        let bArea = 0, bPerim = 0;
+        for (let i = 0, j = bodyPts.length - 1; i < bodyPts.length; j = i++) {
+          bArea += (bodyPts[j][0] + bodyPts[i][0]) * (bodyPts[j][1] - bodyPts[i][1]);
+          bPerim += edge(bodyPts[j], bodyPts[i]);
+        }
+        const bThin = bPerim ? Math.abs(bArea) / bPerim : 0;
+        // keep near-edge-on body faces: skipping them opened a gap between a
+        // turning slab and the body, which looked like a hole in the cube
+        if (bThin >= Math.min(W, H) * 0.003) {
+          facets.push({
+            pts: bodyPts, kind: 'body',
+            depth: vdot(centroid(bodyQuad), depth),
+            top: [0.115, 0.125, 0.145], bottom: [0.055, 0.06, 0.072],
+          });
+        }
 
         // the sticker itself
         const stickerQuad = build(STK, LIFT);
         const stickerPts = stickerQuad.map(toScreen);
-        const edge = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
         let area2 = 0, perim = 0;
         for (let i = 0, j = stickerPts.length - 1; i < stickerPts.length; j = i++) {
           area2 += (stickerPts[j][0] + stickerPts[i][0]) * (stickerPts[j][1] - stickerPts[i][1]);
