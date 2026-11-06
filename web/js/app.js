@@ -18,6 +18,9 @@ const STATUS_FA = { ready: 'آماده', outline: 'اسکلت', planned: 'در �
 const getPuzzle = (id) => CONTENT.puzzles.find(p => p.id === id);
 const getMethod = (pid, mid) => (getPuzzle(pid)?.methods || []).find(m => m.id === mid);
 const getStep = (pid, mid, sid) => (getMethod(pid, mid)?.steps || []).find(s => s.id === sid);
+/* an alternative technique can point at another step page; only link it if that
+   page really exists, otherwise the reader lands on "not found" */
+const hasStep = (pid, mid, sid) => !!getStep(pid, mid, sid);
 
 /* -------------------------------------------------------------- html utils */
 function h(tag, attrs = {}, ...kids) {
@@ -519,12 +522,14 @@ function viewStep(pid, mid, sid) {
         h('div', { class: 'alt__stats' },
           h('span', {}, `${faNum(a.moves)} حرکت`),
           h('span', {}, 'سختی ', difficultyDots(a.difficulty || 1)),
-          a.ref && a.ref !== s.id
+          a.ref && a.ref !== s.id && hasStep(p.id, m.id, a.ref)
             ? h('a', { href: `#/learn/${p.id}/${m.id}/${a.ref}`, style: 'color:var(--accent);font-weight:600' }, 'توضیح کامل ›')
-            : h('span', { class: 'chip chip--muted' }, 'همین صفحه')
+            : a.ref && a.ref !== s.id
+              ? h('span', { class: 'chip chip--muted' }, 'به‌زودی')
+              : h('span', { class: 'chip chip--muted' }, 'همین صفحه')
         )
       );
-      list.append(a.ref && a.ref !== s.id
+      list.append(a.ref && a.ref !== s.id && hasStep(p.id, m.id, a.ref)
         ? h('a', { href: `#/learn/${p.id}/${m.id}/${a.ref}`, style: 'display:block' }, inner)
         : inner);
     }

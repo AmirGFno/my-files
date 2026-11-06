@@ -77,7 +77,7 @@ web/
 `scratch/gen.js` وضعیت همه‌ی گام‌ها را می‌سازد و هر ادعا را می‌سنجد:
 
 ```bash
-node scratch/gen.js          # همه‌ی بررسی‌ها باید PASS شوند
+node tools/cube/gen.js       # همه‌ی بررسی‌ها باید PASS شوند
 ```
 
 چیزهایی که بررسی می‌شود:
@@ -92,10 +92,11 @@ node scratch/gen.js          # همه‌ی بررسی‌ها باید PASS شو�
 
 ```bash
 node --check js/app.js && node --check js/cube-engine.js && node --check data/methods.js
-node scratch/viewtest.js     # هندسه و انیمیشن رندر (بدون مرورگر): ۲۷ استیکر، چرخش واقعی، زوایا
-node scratch/geom.js         # سهم هر وجه در هر زاویه‌ی دوربین + نبود هم‌پوشانی
-node scratch/shot.js         # رندر PNG بدون مرورگر، برای بازبینی چشمی
-cd /tmp/domtest && node test.js   # همه‌ی مسیرها + کنترل‌های شکل با jsdom
+node tools/cube/viewtest.js      # هندسه و انیمیشن رندر (بدون مرورگر): ۲۷ استیکر، چرخش واقعی، زوایا
+node tools/cube/geom.js          # سهم هر وجه در هر زاویه‌ی دوربین + نبود هم‌پوشانی
+node tools/cube/datacheck.js     # لینت محتوا: لینک مرده، گام ناقص، شناسه‌ی تکراری
+node tools/cube/scenes-shot.js   # شیت PNG همه‌ی شکل‌ها، برای بازبینی چشمی
+node tools/cube/shot.js          # رندر PNG یک مکعب در چهار زاویه/میانه‌ی حرکت
 ```
 
 ## وضعیت محتوا

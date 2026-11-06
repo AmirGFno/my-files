@@ -10,11 +10,13 @@
 | `geom.js` | سهم هر وجه در هر زاویه‌ی دوربین + بررسی نبود هم‌پوشانی استیکرها. |
 | `shot.js` | رندر PNG بدون مرورگر (رستری‌ساز کوچک) برای بازبینی چشمی. |
 | `scenes-shot.js` | یک شیت از همه‌ی شکل‌های گام‌ها، تا با هم دیده شوند. |
+| `datacheck.js` | لینت محتوا: شناسه‌ی تکراری، گام ناقص، الگوریتم خالی، لینک جایگزینِ مرده. |
 
 ```bash
 node tools/cube/gen.js
 node tools/cube/viewtest.js
 node tools/cube/geom.js
+node tools/cube/datacheck.js
 node tools/cube/scenes-shot.js   # → tools/cube/out/scenes-sheet.png
 ```
 
