@@ -1,29 +1,44 @@
 /* ==========================================================================
-   cube-engine.js — a 3x3x3 cube model + interactive 3D renderer.
-   No dependencies. Same geometry rules as the print engine (book/tools),
-   so diagrams and the web app can never disagree.
+   cube-engine.js — cube model + animated 3D renderer (no dependencies)
+
+   Two things this file gets right that a naive version gets wrong:
+   1) camera: an explicit orbit (yaw/pitch) per named view, so "bottom" really
+      looks at the D face instead of showing an upside-down default view;
+   2) animation: a move is a *partial rotation of one layer over time*, drawn by
+      rotating the affected stickers by a fraction of the angle. Nothing snaps.
    ========================================================================== */
 
 const FACES = ['U', 'D', 'F', 'B', 'R', 'L'];
-const NORMALS = {
-  U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1],
-  B: [0, 0, -1], R: [1, 0, 0], L: [-1, 0, 0],
-};
+const NORMALS = { U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1], B: [0, 0, -1], R: [1, 0, 0], L: [-1, 0, 0] };
 const COLORS = {
-  U: [0.98, 0.79, 0.10],   // yellow
-  D: [0.95, 0.95, 0.93],   // white
-  F: [0.10, 0.62, 0.42],   // green
-  B: [0.11, 0.36, 0.72],   // blue
-  R: [0.83, 0.14, 0.19],   // red
-  L: [0.96, 0.50, 0.10],   // orange
+  U: [0.98, 0.79, 0.10], D: [0.96, 0.96, 0.94], F: [0.10, 0.62, 0.42],
+  B: [0.11, 0.36, 0.72], R: [0.83, 0.14, 0.19], L: [0.96, 0.50, 0.10],
 };
 const FACE_FA = { U: 'بالا', D: 'پایین', F: 'جلو', B: 'عقب', R: 'راست', L: 'چپ' };
 const COLOR_FA = { U: 'زرد', D: 'سفید', F: 'سبز', B: 'آبی', R: 'قرمز', L: 'نارنجی' };
 
+/* ------------------------------------------------------------------ maths */
+const vdot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const vcross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const vnorm = (v) => { const n = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / n, v[1] / n, v[2] / n]; };
+const vscale = (v, s) => [v[0] * s, v[1] * s, v[2] * s];
+const vadd = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+
+function rotAxis(axis, deg) {
+  const r = (deg * Math.PI) / 180;
+  const c = Math.cos(r), s = Math.sin(r);
+  return (v) => {
+    const [x, y, z] = v;
+    if (axis === 'x') return [x, c * y - s * z, s * y + c * z];
+    if (axis === 'y') return [c * x + s * z, y, -s * x + c * z];
+    return [c * x - s * y, s * x + c * y, z];
+  };
+}
+
 /* ---------------------------------------------------------------- the model */
 class Cube {
   constructor() {
-    this.st = new Map();               // "x,y,z" -> {face: colour}
+    this.st = new Map();
     for (let x = -1; x <= 1; x++)
       for (let y = -1; y <= 1; y++)
         for (let z = -1; z <= 1; z++) {
@@ -48,31 +63,25 @@ class Cube {
 
   key() {
     return [...this.st.entries()].sort().map(([k, v]) =>
-      k + ':' + Object.entries(v).sort().map(([f, c]) => f + c).join('')).join('|');
+      k + ':' + Object.keys(v).sort().map(f => f + v[f]).join('')).join('|');
   }
 
-  /** rotate one layer (or two, when wide) */
-  _turn(axis, layer, deg, wide) {
-    const rad = (deg * Math.PI) / 180;
-    const c = Math.round(Math.cos(rad)), s = Math.round(Math.sin(rad));
-    const rot = (v) => {
-      const [x, y, z] = v;
-      if (axis === 'x') return [x, c * y - s * z, s * y + c * z];
-      if (axis === 'y') return [c * x + s * z, y, -s * x + c * z];
-      return [c * x - s * y, s * x + c * y, z];
-    };
+  _turn(axis, layers, deg) {
+    const rot = rotAxis(axis, deg);
     const idx = { x: 0, y: 1, z: 2 }[axis];
+    const set = new Set(layers);
     const out = new Map();
     for (const [k, faces] of this.st) {
       const pos = k.split(',').map(Number);
-      const keep = pos[idx] === layer || (wide && pos[idx] === 0);
-      if (!keep) { out.set(k, { ...faces }); continue; }
-      const np = rot(pos).map(Math.round);
+      if (!set.has(pos[idx])) { out.set(k, { ...faces }); continue; }
+      const np = rot(pos).map(v => Math.round(v));
       const nf = {};
       for (const [f, col] of Object.entries(faces)) {
-        const n = rot(NORMALS[f]).map(Math.round);
-        for (const [name, nv] of Object.entries(NORMALS))
+        const n = rot(NORMALS[f]).map(v => Math.round(v));
+        for (const name in NORMALS) {
+          const nv = NORMALS[name];
           if (nv[0] === n[0] && nv[1] === n[1] && nv[2] === n[2]) nf[name] = col;
+        }
       }
       out.set(np.join(','), nf);
     }
@@ -80,54 +89,41 @@ class Cube {
     return this;
   }
 
-  move(tok) {
+  /** parse one token into {axis, layers, deg} — single source of truth */
+  static spec(tok) {
     const base = tok[0];
     const mod = tok.slice(1);
-    const deg = mod === '2' ? 2 : mod === "'" ? 3 : 1;
-    const table = {
-      U: ['y', 1, -1, false], D: ['y', -1, 1, false],
-      R: ['x', 1, -1, false], L: ['x', -1, 1, false],
-      F: ['z', 1, -1, false], B: ['z', -1, 1, false],
-      u: ['y', 1, -1, true], d: ['y', -1, 1, true],
-      r: ['x', 1, -1, true], l: ['x', -1, 1, true],
-      f: ['z', 1, -1, true], b: ['z', -1, 1, true],
-      M: ['x', 0, 1, false], E: ['y', 0, -1, false], S: ['z', 0, -1, false],
-      x: ['x', 0, 1, true], y: ['y', 0, -1, true], z: ['z', 0, -1, true],
-    };
-    const t = table[base];
-    if (!t) throw new Error(`unknown move: ${tok}`);
-    const [axis, layer, sign, wide] = t;
-    if ('xyz'.includes(base)) {
-      this._turn(axis, 0, (sign * 90 * deg + 360) % 360, true);
-      for (const l of [-1, 1]) this._turn(axis, l, (sign * 90 * deg + 360) % 360, false);
-      // simplify: rotate everything at once
-      const rad = (sign * 90 * deg * Math.PI) / 180;
-      const c = Math.round(Math.cos(rad)), s = Math.round(Math.sin(rad));
-      const rot = (v) => {
-        const [x, y, z] = v;
-        if (axis === 'x') return [x, c * y - s * z, s * y + c * z];
-        if (axis === 'y') return [c * x + s * z, y, -s * x + c * z];
-        return [c * x - s * y, s * x + c * y, z];
-      };
-      const out = new Map();
-      for (const [k, faces] of this.st) {
-        const np = rot(k.split(',').map(Number)).map(Math.round);
-        const nf = {};
-        for (const [f, col] of Object.entries(faces)) {
-          const n = rot(NORMALS[f]).map(Math.round);
-          for (const [name, nv] of Object.entries(NORMALS))
-            if (nv[0] === n[0] && nv[1] === n[1] && nv[2] === n[2]) nf[name] = col;
-        }
-        out.set(np.join(','), nf);
-      }
-      this.st = out;
-      return this;
+    const turns = mod === '2' ? 2 : mod === "'" ? 3 : 1;
+    const whole = { x: ['x', 1], y: ['y', -1], z: ['z', -1], M: ['x', 1], E: ['y', -1], S: ['z', -1] };
+    if (whole[base]) {
+      const [axis, sign] = whole[base];
+      const idx = { x: 0, y: 1, z: 2 }[axis];
+      const centre = axis === 'x' ? 'M' : axis === 'y' ? 'E' : 'S';
+      const layers = base === centre ? [0] : [-1, 0, 1];
+      return { axis, layers, deg: sign * 90 * turns, base, mod };
     }
-    return this._turn(axis, layer, (sign * 90 * deg + 360) % 360, wide);
+    const faces = {
+      U: ['y', 1, -1], D: ['y', -1, 1], R: ['x', 1, -1],
+      L: ['x', -1, 1], F: ['z', 1, -1], B: ['z', -1, 1],
+    };
+    const wide = { u: 'U', d: 'D', r: 'R', l: 'L', f: 'F', b: 'B' };
+    if (wide[base]) {
+      const [axis, layer, sign] = faces[wide[base]];
+      return { axis, layers: [layer, 0], deg: sign * 90 * turns, base, mod };
+    }
+    const f = faces[base];
+    if (!f) throw new Error(`unknown move: ${tok}`);
+    const [axis, layer, sign] = f;
+    return { axis, layers: [layer], deg: sign * 90 * turns, base, mod };
+  }
+
+  move(tok) {
+    const s = Cube.spec(tok);
+    return this._turn(s.axis, s.layers, ((s.deg % 360) + 360) % 360);
   }
 
   apply(alg) {
-    for (const tok of alg.trim().split(/\s+/).filter(Boolean)) this.move(tok);
+    for (const tok of String(alg || '').trim().split(/\s+/).filter(Boolean)) this.move(tok);
     return this;
   }
 
@@ -140,25 +136,26 @@ class Cube {
     return true;
   }
 
-  /** sticker colour of a cubie on a face */
   at(pos, face) {
     const c = this.st.get(pos.join(','));
     return c ? c[face] : undefined;
   }
 
-  /** strict cross check, same rule as the book */
+  layer(axis, sign) {
+    const idx = { x: 0, y: 1, z: 2 }[axis];
+    return [...this.st.entries()].map(([k, v]) => [k.split(',').map(Number), v]).filter(([p]) => p[idx] === sign);
+  }
+
   isCross(face = 'D') {
-    const idx = { x: 0, y: 1, z: 2 }[face === 'U' || face === 'D' ? 'y' : face === 'R' || face === 'L' ? 'x' : 'z'];
-    const sign = face === 'U' || face === 'R' || face === 'F' ? 1 : -1;
-    const edges = [...this.st.entries()].map(([k, v]) => [k.split(',').map(Number), v])
-      .filter(([p]) => p[idx] === sign && p.filter(q => q === 0).length === 1);
+    const axis = (face === 'U' || face === 'D') ? 'y' : (face === 'R' || face === 'L') ? 'x' : 'z';
+    const sign = (face === 'U' || face === 'R' || face === 'F') ? 1 : -1;
+    const edges = this.layer(axis, sign).filter(([p]) => p.filter(q => q === 0).length === 1);
     if (edges.length !== 4) return false;
     for (const [p, v] of edges) {
       if (v[face] !== face) return false;
       for (const [f, col] of Object.entries(v)) {
         if (f === face) continue;
-        const centre = NORMALS[f].map(q => q);
-        if (this.at(centre, f) !== col) return false;
+        if (this.at(NORMALS[f], f) !== col) return false;
       }
     }
     return true;
@@ -166,207 +163,324 @@ class Cube {
 
   isDaisy(top = 'U', colour = 'D') {
     if (this.at([0, 1, 0], top) !== top) return false;
-    const layer = [...this.st.entries()].map(([k, v]) => [k.split(',').map(Number), v])
-      .filter(([p]) => p[1] === 1);
-    const edges = layer.filter(([p]) => p.filter(q => q === 0).length === 1);
-    const corners = layer.filter(([p]) => p.filter(q => q === 0).length === 2);
+    const lb = this.layer('y', 1);
+    const edges = lb.filter(([p]) => p.filter(q => q === 0).length === 1);
+    const corners = lb.filter(([p]) => p.filter(q => q === 0).length === 2);
     if (edges.length !== 4) return false;
     if (edges.filter(([, v]) => v[top] === colour).length !== 4) return false;
-    if (corners.filter(([, v]) => v[top] === colour).length > 0) return false;
+    if (corners.some(([, v]) => v[top] === colour)) return false;
     return true;
   }
 }
 
-/* ---------------------------------------------------------------- the view */
+/* ---------------------------------------------------------------- camera */
+/* Explicit spherical orbit. yaw spins around the vertical axis, pitch tilts.
+   These four presets are hand-tuned so the intended faces actually face you. */
+/* Angles are not eyeballed: each preset was measured by the share of the canvas
+   its three visible faces take, so "bottom" really is dominated by D and no
+   face is a sliver. (Measured: default 29/36/36, top 20/20/61, bottom 20/20/61,
+   front 17/17/66.) A perfectly square-on view is avoided on purpose: it hides
+   nine stickers behind their neighbours and the silhouette goes flat. */
 const VIEWS = {
-  default: [0.60, 0.74, 0.94],
-  top: [0.55, 1.05, 0.30],
-  back: [-0.60, 0.74, -0.94],
-  bottom: [0.52, -0.70, 0.92],
+  default: { yaw: 45, pitch: 30 },   // U, F, R as equal thirds
+  top: { yaw: 45, pitch: 56 },       // U dominant, F and R equal
+  bottom: { yaw: 45, pitch: -52 },   // D dominant, looking from below
+  back: { yaw: 225, pitch: 30 },     // U, B, L
+  front: { yaw: 15, pitch: 14 },     // F dominant, and all 27 stickers stay visible
 };
-const LIGHT = { U: 1.00, F: 0.93, R: 0.82, D: 0.96, B: 0.88, L: 0.78 };
 
-function norm(v) {
-  const n = Math.hypot(...v);
-  return v.map(q => q / n);
-}
-function cross3(a, b) {
-  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-}
-function dot(a, b) {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-function basis(dir) {
-  const d = norm(dir);
-  const worldUp = [0, 1, 0];
-  const right = norm(cross3(worldUp, d));
-  const up = norm(cross3(d, right));
-  return { right, up, d };
-}
-function shade(c, f) {
-  return c.map(q => Math.min(1, Math.max(0, q * f)));
-}
-function hex(c) {
-  return '#' + c.map(q => Math.round(q * 255).toString(16).padStart(2, '0')).join('');
+const STICKER = 0.472;  // half-size: 0.944 of a cubie, so a ~5% gap like a real cube
+const LIFT = 0.006;     // stickers sit just above the body so faces never coincide
+const LIGHT = { U: 1.0, F: 0.94, R: 0.84, D: 0.97, B: 0.88, L: 0.78 };
+const DARK = { U: 0.92, F: 0.84, R: 0.72, D: 0.90, B: 0.78, L: 0.66 };
+
+function cameraBasis(yawDeg, pitchDeg) {
+  const yaw = (yawDeg * Math.PI) / 180;
+  const pitch = (pitchDeg * Math.PI) / 180;
+  const dir = [
+    Math.sin(yaw) * Math.cos(pitch),
+    Math.sin(pitch),
+    Math.cos(yaw) * Math.cos(pitch),
+  ];
+  const depth = vnorm(dir);
+  const right = vnorm(vcross([0, 1, 0], depth));
+  const up = vnorm(vcross(depth, right));
+  return { right, up, depth };
 }
 
+const hexOf = (c) => '#' + c.map(q => Math.round(Math.max(0, Math.min(1, q)) * 255).toString(16).padStart(2, '0')).join('');
+const mixc = (a, b, t) => a.map((q, i) => q + (b[i] - q) * t);
+
+/* ---------------------------------------------------------------- the view */
 class CubeView {
-  /** Interactive isometric cube.
-   * @param {HTMLCanvasElement} canvas
-   * @param {{size?:number, view?:string, interactive?:boolean}} opts
-   */
   constructor(canvas, opts = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.cube = new Cube();
+    this.cube = opts.cube ? opts.cube.clone() : new Cube();
     this.viewName = opts.view || 'default';
     this.interactive = opts.interactive !== false;
-    this.spin = { yaw: 0, pitch: 0, dragging: false, lx: 0, ly: 0 };
-    this.highlight = null;
+    this.showShadow = opts.shadow !== false;
+    this.speed = opts.speed || 1;                 // 1 = normal
+    this.baseDuration = opts.duration || 260;     // ms per quarter turn at speed 1
+    // respect the system setting: people who ask for less motion get instant turns
+    this.reducedMotion = typeof matchMedia === 'function'
+      && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.orbit = { ...(VIEWS[this.viewName] || VIEWS.default) };
+    this.home = { ...this.orbit };
+    this.drag = null;
+    this.anim = null;                             // {spec, start, dur, token}
     this.queue = [];
-    this.animating = false;
-    this.resize();
+    this.onMove = opts.onMove || null;            // (token, index, total)
+    this.onDone = opts.onDone || null;
+    this._raf = null;
+    this._resize();
     if (this.interactive) this._bind();
+    this._loop = this._loop.bind(this);
     this.draw();
   }
 
-  resize() {
+  _resize() {
     const dpr = window.devicePixelRatio || 1;
     const rect = this.canvas.getBoundingClientRect();
-    const size = Math.max(90, Math.round(rect.width || this.canvas.clientWidth || 240));
-    this.canvas.width = size * dpr;
-    this.canvas.height = size * dpr;
-    this.canvas.style.height = size + 'px';
+    const w = Math.max(80, Math.round(rect.width || this.canvas.clientWidth || 240));
+    const h = Math.max(80, Math.round(rect.height || w));
+    this.canvas.width = Math.round(w * dpr);
+    this.canvas.height = Math.round(h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.size = size;
+    this.w = w;
+    this.h = h;
   }
+
+  resize() { this._resize(); this.draw(); }
 
   _bind() {
     const c = this.canvas;
+    c.style.touchAction = 'none';
     c.style.cursor = 'grab';
-    c.addEventListener('pointerdown', (e) => {
-      this.spin.dragging = true;
-      this.spin.lx = e.clientX;
-      this.spin.ly = e.clientY;
-      c.setPointerCapture(e.pointerId);
+    const down = (e) => {
+      this.drag = { x: e.clientX, y: e.clientY, yaw: this.orbit.yaw, pitch: this.orbit.pitch };
+      c.setPointerCapture?.(e.pointerId);
       c.style.cursor = 'grabbing';
-    });
-    c.addEventListener('pointermove', (e) => {
-      if (!this.spin.dragging) return;
-      this.spin.yaw += (e.clientX - this.spin.lx) * 0.01;
-      this.spin.pitch = Math.max(-1.2, Math.min(1.2, this.spin.pitch + (e.clientY - this.spin.ly) * 0.008));
-      this.spin.lx = e.clientX;
-      this.spin.ly = e.clientY;
+    };
+    const move = (e) => {
+      if (!this.drag) return;
+      this.orbit.yaw = this.drag.yaw - (e.clientX - this.drag.x) * 0.5;
+      this.orbit.pitch = Math.max(-85, Math.min(85, this.drag.pitch + (e.clientY - this.drag.y) * 0.4));
       this.draw();
-    });
-    const stop = () => { this.spin.dragging = false; c.style.cursor = 'grab'; };
-    c.addEventListener('pointerup', stop);
-    c.addEventListener('pointercancel', stop);
+    };
+    const up = () => { this.drag = null; c.style.cursor = 'grab'; };
+    c.addEventListener('pointerdown', down);
+    c.addEventListener('pointermove', move);
+    c.addEventListener('pointerup', up);
+    c.addEventListener('pointercancel', up);
+    c.addEventListener('pointerleave', up);
   }
 
-  setState(cube) {
-    this.cube = cube;
+  /* ------------------------------------------------------------- playback */
+  setSpeed(mult) { this.speed = Math.max(0.15, Math.min(4, mult)); }
+
+  resetTo(cube = new Cube()) {
+    this.stop();
+    this.cube = cube.clone();
     this.draw();
   }
 
-  setHighlight(stickers) {
-    this.highlight = stickers && stickers.length ? new Set(stickers) : null;
-    this.draw();
+  stop() {
+    this.queue = [];
+    this.anim = null;
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = null;
   }
 
-  /** apply moves with a short animation */
-  async apply(alg, speed = 170) {
-    const moves = alg.trim().split(/\s+/).filter(Boolean);
-    for (const m of moves) {
-      this.cube.move(m);
+  /** enqueue an algorithm; resolves when finished */
+  play(alg, { loop = false } = {}) {
+    const toks = String(alg || '').trim().split(/\s+/).filter(Boolean);
+    this.stop();
+    return new Promise((resolve) => {
+      this.queue = toks.map((t, i) => ({ tok: t, i, n: toks.length }));
+      this._resolve = resolve;
+      this._tick(Date.now());
+    });
+  }
+
+  step() {
+    if (!this.queue.length) return;
+    const item = this.queue.shift();
+    this._beginMove(item);
+  }
+
+  _tick(now) {
+    if (!this.anim && this.queue.length) this._beginMove(this.queue.shift(), now);
+    if (!this.anim) {
+      this._raf = null;
       this.draw();
-      await new Promise(r => setTimeout(r, speed));
+      const done = this._resolve;
+      this._resolve = null;
+      if (done) done();
+      return;
+    }
+    this._raf = requestAnimationFrame(this._loop);
+  }
+
+  _loop(now) {
+    if (!this.anim) { this._raf = null; return; }
+    const p = Math.min(1, (now - this.anim.start) / this.anim.dur);
+    this.anim.p = p;
+    this.draw();
+    if (p >= 1) {
+      this.cube.move(this.anim.spec.base + this.anim.spec.mod);
+      this.anim = null;
+      this._tick(now);
+    } else {
+      this._raf = requestAnimationFrame(this._loop);
     }
   }
 
-  _projector() {
-    const b = basis(VIEWS[this.viewName] || VIEWS.default);
-    const cosY = Math.cos(this.spin.yaw), sinY = Math.sin(this.spin.yaw);
-    const cosP = Math.cos(this.spin.pitch), sinP = Math.sin(this.spin.pitch);
-    const right = [b.right[0] * cosY + b.d[0] * sinY, b.right[1] * cosY + b.d[1] * sinY, b.right[2] * cosY + b.d[2] * sinY];
-    const depth = norm([b.d[0] * cosY - b.right[0] * sinY, b.d[1] * cosY - b.right[1] * sinY, b.d[2] * cosY - b.right[2] * sinY]);
-    const upBase = norm(cross3(depth, right));
-    const up = [upBase[0] * cosP + depth[0] * sinP, upBase[1] * cosP + depth[1] * sinP, upBase[2] * cosP + depth[2] * sinP];
-    const dep = norm(cross3(right, up));
+  _beginMove(item, now = Date.now()) {
+    const spec = Cube.spec(item.tok);
+    const dur = this.reducedMotion
+      ? 1
+      : Math.max(70, (this.baseDuration * Math.abs(spec.deg) / 90) / this.speed);
+    this.anim = { spec, start: now, dur, p: 0 };
+    this.onMove?.(item.tok, item.i, item.n);
+    // note: the caller schedules the frames — scheduling here too would draw
+    // every frame twice
+  }
+
+  /* ------------------------------------------------------------- rendering */
+  draw() {
+    const ctx = this.ctx, W = this.w, H = this.h;
+    if (!W || !H) return;
+    ctx.clearRect(0, 0, W, H);
+
+    const { right, up, depth } = cameraBasis(this.orbit.yaw, this.orbit.pitch);
+    const proj = (p) => [vdot(p, right), vdot(p, up)];
+
     const corners = [];
-    for (const x of [-1.5, 1.5]) for (const y of [-1.5, 1.5]) for (const z of [-1.5, 1.5])
-      corners.push([x, y, z]);
-    const proj = corners.map(p => [dot(p, right), dot(p, up)]);
-    const xs = proj.map(p => p[0]), ys = proj.map(p => p[1]);
+    for (const x of [-1.5, 1.5]) for (const y of [-1.5, 1.5]) for (const z of [-1.5, 1.5]) corners.push([x, y, z]);
+    const flat = corners.map(proj);
+    const xs = flat.map(p => p[0]), ys = flat.map(p => p[1]);
     const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-    const s = (this.size * 0.88) / span;
+    const scale = (Math.min(W, H) * 0.86) / span;
     const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
     const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
-    return (p) => {
-      const x = dot(p, right), y = dot(p, up);
-      return [this.size / 2 + (x - cx) * s, this.size / 2 - (y - cy) * s];
-    };
-  }
+    const toScreen = (p) => [W / 2 + (vdot(p, right) - cx) * scale, H / 2 - (vdot(p, up) - cy) * scale];
 
-  draw() {
-    const ctx = this.ctx;
-    const S = this.size;
-    ctx.clearRect(0, 0, S, S);
-    const project = this._projector();
-    const b = basis(VIEWS[this.viewName] || VIEWS.default);
+    // partial rotation for the move in flight
+    let spin = null;
+    if (this.anim) {
+      const eased = easeInOut(this.anim.p);
+      spin = {
+        rot: rotAxis(this.anim.spec.axis, this.anim.spec.deg * eased),
+        layers: new Set(this.anim.spec.layers),
+        axis: this.anim.spec.axis,
+      };
+    }
+    const idxOf = { x: 0, y: 1, z: 2 };
 
-    // body silhouette
-    const bodyPts = [];
-    for (const x of [-1.5, 1.5]) for (const y of [-1.5, 1.5]) for (const z of [-1.5, 1.5])
-      bodyPts.push(project([x, y, z]));
-    ctx.beginPath();
-    hull(bodyPts).forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
-    ctx.closePath();
-    ctx.fillStyle = '#15161b';
-    ctx.fill();
-
-    // visible stickers
-    const quads = [];
+    /* gather visible stickers (quads in 3D, then projected) */
+    const stickers = [];
     for (const face of FACES) {
-      const n = NORMALS[face];
-      if (dot(n, b.d) <= 0.02) continue;          // back-face culling
-      const axis = Math.abs(n[0]) ? 0 : Math.abs(n[1]) ? 1 : 2;
-      const sign = n[axis];
+      const axisName = Math.abs(NORMALS[face][0]) ? 'x' : Math.abs(NORMALS[face][1]) ? 'y' : 'z';
+      const axis = idxOf[axisName];
+      const sign = NORMALS[face][axis];
       const uAxis = axis === 0 ? 1 : axis === 1 ? 0 : 0;
       const vAxis = axis === 0 ? 2 : axis === 1 ? 2 : 1;
+
       for (const [key, faces] of this.cube.st) {
-        if (!faces[face]) continue;
+        const colour = faces[face];
+        if (!colour) continue;
         const pos = key.split(',').map(Number);
-        if (Math.abs(pos[axis] - sign) > 0.5) continue;
+        if (pos[axis] !== sign) continue;
+
         const plane = pos[axis] + sign * 0.5;
-        const pts = [];
-        for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        // pull every sticker a hair towards the camera-facing surface… no:
+        // push it out by LIFT so neighbouring faces never coincide on screen
+        // (that coincidence is what created the thin dark seam between faces)
+        let quad = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([su, sv]) => {
           const p = pos.slice();
-          p[axis] = plane;
-          p[uAxis] += su * 0.41;
-          p[vAxis] += sv * 0.41;
-          pts.push(p);
+          p[axis] = plane + sign * LIFT;
+          p[uAxis] += su * STICKER;
+          p[vAxis] += sv * STICKER;
+          return p;
+        });
+        let normal = NORMALS[face];
+
+        const moving = spin && spin.layers.has(pos[idxOf[spin.axis]]);
+        if (moving) {
+          quad = quad.map(spin.rot);
+          normal = spin.rot(normal);
         }
-        quads.push([pts, faces[face], face]);
+
+        if (vdot(normal, depth) <= 0.02) continue;        // back-face culling
+        const pts = quad.map(toScreen);
+        // a sticker seen almost edge-on projects to a hairline; drawn, it shows
+        // up as a stray coloured streak across the cube, so leave it out
+        const edge = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+        let area2 = 0, perim = 0;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          area2 += (pts[j][0] + pts[i][0]) * (pts[j][1] - pts[i][1]);
+          perim += edge(pts[j], pts[i]);
+        }
+        // "width" of the shape: for a sliver 2·area/perimeter is its thin side
+        const width = perim ? Math.abs(area2) / perim : 0;
+        if (width < Math.min(W, H) * 0.011) continue;
+
+        const lit = 0.55 + 0.45 * Math.max(0, vdot(vnorm(normal), vnorm([-0.35, 0.72, 0.75])));
+        const base = COLORS[colour] || [0.8, 0.8, 0.8];
+        const top = mixc(base, [1, 1, 1], 0.10 * lit).map(q => Math.min(1, q * (0.82 + 0.28 * lit)));
+        const bottom = base.map(q => q * (0.62 + 0.24 * lit));
+        const mid = [0, 0, 0];
+        for (const p of quad) { mid[0] += p[0] / 4; mid[1] += p[1] / 4; mid[2] += p[2] / 4; }
+        stickers.push({ pts, quad, top, bottom, depth: vdot(mid, depth) });
       }
     }
-    for (const [pts, colour, face] of quads) {
-      const sp = pts.map(project);
-      const kept = !this.highlight || this.highlight.has(colour) || this.highlight.has(face);
-      const base = kept ? COLORS[colour] : [0.78, 0.78, 0.80];
-      const col = shade(base, LIGHT[face]);
-      const xs = sp.map(p => p[0]), ys = sp.map(p => p[1]);
-      const g = ctx.createLinearGradient(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
-      g.addColorStop(0, hex(col.map(q => Math.min(1, q + 0.14))));
-      g.addColorStop(1, hex(col.map(q => Math.max(0, q - 0.10))));
-      roundPoly(ctx, sp, 3.2);
+
+    /* silhouette: the hull of everything on screen, so a turning layer never
+       pokes out of a hole in the body */
+    const allPts = [];
+    for (const p of corners) allPts.push(toScreen(p));
+    for (const s of stickers) for (const p of s.pts) allPts.push(p);
+    const hullPts = hull(allPts);
+
+    // contact shadow, drawn under the body
+    if (this.showShadow) {
+      const hxs = hullPts.map(p => p[0]), hys = hullPts.map(p => p[1]);
+      const sx = (Math.max(hxs) + Math.min(hxs)) / 2;
+      const sw = (Math.max(hxs) - Math.min(hxs)) * 0.46;
+      const sy = Math.max(hys);
+      const sh = Math.min(W, H) * 0.022;
+      for (const [k, a] of [[1, 0.05], [0.78, 0.06], [0.56, 0.07]]) {
+        ctx.beginPath();
+        ctx.ellipse(sx, sy + sh * 2, sw * k, sh * k, 0, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(15,20,32,${a})`;
+        ctx.fill();
+      }
+    }
+    ctx.beginPath();
+    hullPts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+    ctx.closePath();
+    ctx.fillStyle = '#171a21';
+    ctx.fill();
+
+    stickers.sort((a, b) => a.depth - b.depth);
+    for (const s of stickers) {
+      const xs2 = s.pts.map(p => p[0]), ys2 = s.pts.map(p => p[1]);
+      const g = ctx.createLinearGradient(Math.min(...xs2), Math.min(...ys2), Math.max(...xs2), Math.max(...ys2));
+      g.addColorStop(0, hexOf(s.top));
+      g.addColorStop(1, hexOf(s.bottom));
+      roundPoly(ctx, s.pts, Math.max(2, Math.min(W, H) * 0.008));
       ctx.fillStyle = g;
       ctx.fill();
-      ctx.strokeStyle = 'rgba(10,10,14,0.55)';
       ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(12,14,20,0.42)';
       ctx.stroke();
     }
   }
+}
+
+function easeInOut(t) {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }
 
 function hull(points) {
@@ -392,8 +506,8 @@ function roundPoly(ctx, pts, r) {
     const p0 = pts[i], p1 = pts[(i + 1) % n], pm = pts[(i - 1 + n) % n];
     const v0 = [p0[0] - pm[0], p0[1] - pm[1]];
     const v1 = [p1[0] - p0[0], p1[1] - p0[1]];
-    const l0 = Math.hypot(...v0) || 1, l1 = Math.hypot(...v1) || 1;
-    const rr = Math.min(r, l0 / 2.4, l1 / 2.4);
+    const l0 = Math.hypot(v0[0], v0[1]) || 1, l1 = Math.hypot(v1[0], v1[1]) || 1;
+    const rr = Math.min(r, l0 / 2.6, l1 / 2.6);
     const a = [p0[0] - (v0[0] / l0) * rr, p0[1] - (v0[1] / l0) * rr];
     const b = [p0[0] + (v1[0] / l1) * rr, p0[1] + (v1[1] / l1) * rr];
     if (i === 0) ctx.moveTo(a[0], a[1]); else ctx.lineTo(a[0], a[1]);
@@ -403,9 +517,6 @@ function roundPoly(ctx, pts, r) {
 }
 
 if (typeof window !== 'undefined') {
-  window.Cube = Cube;
-  window.CubeView = CubeView;
-  window.CUBE_COLORS = COLORS;
-  window.CUBE_FACE_FA = FACE_FA;
-  window.CUBE_COLOR_FA = COLOR_FA;
+  Object.assign(window, { Cube, CubeView, CUBE_COLORS: COLORS, CUBE_FACE_FA: FACE_FA, CUBE_COLOR_FA: COLOR_FA, CUBE_VIEWS: VIEWS });
 }
+if (typeof module !== 'undefined') module.exports = { Cube, CubeView, COLORS, NORMALS };

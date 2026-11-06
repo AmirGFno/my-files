@@ -49,11 +49,150 @@ const liveViews = [];
 function mountCube(parent, opts = {}) {
   const canvas = h('canvas', { 'aria-label': opts.label || 'نمای سه‌بعدی مکعب' });
   parent.append(canvas);
-  const view = new CubeView(canvas, { view: opts.view || 'default', interactive: opts.interactive !== false });
+  const view = new CubeView(canvas, {
+    view: opts.view || 'default',
+    interactive: opts.interactive !== false,
+    speed: opts.speed || 1,
+    duration: opts.duration || 260,
+    shadow: opts.shadow,
+  });
   if (opts.alg) view.cube.apply(opts.alg);
   view.draw();
   liveViews.push(view);
   return view;
+}
+
+/* a small cube figure with its own controls: this is the "one figure, two
+   sizes" unit used on every step page */
+const SPEEDS = [0.5, 1, 2];
+const VIEW_LABELS = { default: 'سه‌رخ', top: 'از بالا', bottom: 'از پایین', front: 'از جلو' };
+/* short labels keep the control bar inside a narrow figure column */
+const VIEW_SHORT = { default: 'سه‌رخ', top: 'بالا', bottom: 'پایین', front: 'جلو' };
+
+function cubeFigure({ label, alg, next, view, small = true, maxWidth = 220 }) {
+  const holder = h('div', { class: `fig ${small ? 'fig--small' : 'fig--big'}` });
+  const canvas = h('canvas', { 'aria-label': label || 'نمای سه‌بعدی مکعب' });
+  const stage = h('div', { class: 'fig__stage' }, canvas);
+  if (maxWidth) canvas.style.maxWidth = maxWidth + 'px';
+  const view3d = new CubeView(canvas, { view: view || 'default', interactive: true, duration: 300 });
+  if (alg) view3d.cube.apply(alg);
+  holder.append(
+    h('div', { class: 'fig-top' },
+      h('span', { class: 'fig__label' }, label || ''),
+      h('span', { class: 'fig__view' }, VIEW_LABELS[view || 'default'] || '')
+    ),
+    stage
+  );
+
+  const bar = h('div', { class: 'fig__bar' });
+  const playBtn = next ? h('button', {
+    class: 'fig__btn fig__btn--play', type: 'button',
+    'aria-label': 'اجرای این گام روی مکعب',
+    onclick: async () => {
+      playBtn.classList.add('is-on');
+      playBtn.textContent = 'در حال اجرا…';
+      await view3d.play(next, {});
+      playBtn.classList.remove('is-on');
+      playBtn.textContent = '▶ دوباره';
+    },
+  }, '▶ اجرای گام') : null;
+  const resetBtn = h('button', {
+    class: 'fig__btn', type: 'button', 'aria-label': 'برگرداندن مکعب به حالت اول',
+    onclick: () => {
+      view3d.stop();
+      view3d.cube = new Cube().apply(alg || '');
+      view3d.draw();
+    },
+  }, '↺');
+
+  const speedWrap = h('div', { class: 'fig__seg', role: 'group', 'aria-label': 'سرعت پخش' });
+  let speed = 1;
+  for (const sp of SPEEDS) {
+    const b = h('button', {
+      type: 'button', class: sp === 1 ? 'is-on' : '', 'aria-label': `سرعت ${sp} برابر`,
+      onclick: () => {
+        speed = sp;
+        view3d.setSpeed(sp);
+        [...speedWrap.children].forEach(c => c.classList.remove('is-on'));
+        b.classList.add('is-on');
+      },
+    }, sp === 0.5 ? '۰٫۵×' : sp === 1 ? '۱×' : '۲×');
+    speedWrap.append(b);
+  }
+
+  const viewWrap = h('div', { class: 'fig__seg', role: 'group', 'aria-label': 'زاویهٔ دوربین' });
+  let currentView = view || 'default';
+  for (const name of ['default', 'top', 'bottom', 'front']) {
+    const b = h('button', {
+      type: 'button', class: name === currentView ? 'is-on' : '',
+      title: `نمای ${VIEW_LABELS[name]}`, 'aria-label': `نمای ${VIEW_LABELS[name]}`,
+      onclick: () => {
+        currentView = name;
+        view3d.orbit = { ...CUBE_VIEWS[name] };
+        view3d.home = { ...view3d.orbit };
+        [...viewWrap.children].forEach(c => c.classList.remove('is-on'));
+        b.classList.add('is-on');
+        view3d.draw();
+      },
+    }, VIEW_SHORT[name]);
+    viewWrap.append(b);
+  }
+
+  const bigBtn = h('button', {
+    class: 'fig__btn fig__btn--big', type: 'button', 'aria-label': 'نمایش بزرگ مکعب',
+    onclick: () => openCubeModal({ alg, next, view: currentView, label, speed }),
+  }, '⤢ بزرگ');
+
+  bar.append(...[playBtn, resetBtn, bigBtn].filter(Boolean));
+  holder.append(bar, h('div', { class: 'fig__bar fig__bar--seg' }, speedWrap, viewWrap));
+  if (next) holder.append(h('figcaption', { dir: 'ltr', class: 'fig__alg' }, next));
+  liveViews.push(view3d);
+  requestAnimationFrame(() => { view3d.resize(); view3d.draw(); });
+  return holder;
+}
+
+/* big mode: same cube, same animation, a much larger canvas */
+function openCubeModal({ alg, next, view, label, speed = 1 }) {
+  const modal = h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': label || 'مکعب بزرگ' });
+  const sheet = h('div', { class: 'modal__sheet' });
+  const closeBtn = h('button', { class: 'modal__close', type: 'button', 'aria-label': 'بستن' }, '×');
+  const canvas = h('canvas', { 'aria-label': 'نمای بزرگ مکعب' });
+  const body = h('div', { class: 'modal__body' }, canvas);
+  const foot = h('div', { class: 'modal__foot' });
+  sheet.append(h('div', { class: 'modal__head' }, h('strong', {}, label || 'مکعب'), closeBtn), body, foot);
+  modal.append(sheet);
+  document.body.append(modal);
+  document.body.style.overflow = 'hidden';
+
+  const big = new CubeView(canvas, { view: view || 'default', interactive: true, duration: 320, speed });
+  if (alg) big.cube.apply(alg);
+  liveViews.push(big);
+  requestAnimationFrame(() => { big.resize(); big.draw(); });
+
+  const play = h('button', {
+    class: 'btn btn--primary', type: 'button',
+    onclick: async () => { if (next) await big.play(next); },
+  }, next ? '▶ اجرای گام' : '—');
+  const reset = h('button', {
+    class: 'btn btn--ghost', type: 'button',
+    onclick: () => { big.stop(); big.cube = new Cube().apply(alg || ''); big.draw(); },
+  }, '↺ از نو');
+  const hint = h('span', { class: 'modal__hint' }, 'برای چرخاندن مکعب، با ماوس یا انگشت بکش.');
+  foot.append(play, reset, hint);
+
+  const close = () => {
+    big.stop();
+    modal.remove();
+    document.body.style.overflow = '';
+    const i = liveViews.indexOf(big);
+    if (i >= 0) liveViews.splice(i, 1);
+  };
+  closeBtn.addEventListener('click', close);
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+  const onKey = (e) => {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); }
+  };
+  document.addEventListener('keydown', onKey);
 }
 
 /* --------------------------------------------------------------- theme */
@@ -273,32 +412,20 @@ function viewStep(pid, mid, sid) {
 
   const body = h('div', { class: 'stepbody' });
 
-  /* 1 — figures */
+  /* 1 — figures: each is a real state, with the step's own algorithm as a button */
   if ((s.states || []).length) {
-    const figs = h('div', { class: 'figs' });
+    const figs = h('div', { class: `figs figs--${Math.min((s.states || []).length, 3)}` });
     for (const st of s.states) {
-      const fig = h('figure', { class: 'fig' });
-      const holder = h('div');
-      fig.append(
-        h('div', { class: 'fig-top' },
-          h('span', {}, st.label || ''),
-          st.alg ? h('button', {
-            class: 'alg-play', style: 'background:none;border:0;cursor:pointer;color:var(--accent);font-size:11.5px',
-            onclick: (e) => { e.preventDefault(); playOn(st.alg, view); },
-          }, '▶ اجرا') : null
-        ),
-        holder,
-        st.alg ? h('figcaption', { dir: 'ltr', style: 'font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.04em' }, st.alg) : null
-      );
-      figs.append(fig);
-      const view = new CubeView(h('canvas'), { view: st.view || 'default', interactive: true });
-      view.cube.apply(st.alg || '');
-      view.draw();
-      holder.append(view.canvas);
-      requestAnimationFrame(() => { view.resize(); view.draw(); });
-      liveViews.push(view);
+      figs.append(cubeFigure({
+        label: st.label || '', alg: st.alg, next: st.next, view: st.view,
+        maxWidth: (s.states || []).length === 1 ? 300 : 220,
+      }));
     }
-    body.append(figs);
+    body.append(h('div', { class: 'block' },
+      h('div', { class: 'block__label' }, h('span', { class: 'n' }, '۱'), 'وضعیت مکعب در این گام'),
+      figs,
+      h('p', { class: 'block__note' },
+        'هر شکل یک وضعیت واقعی است؛ دکمه‌ی «اجرای گام» همان الگوریتم این صفحه را روی همان مکعب اجرا می‌کند.')));
   }
 
   /* 2 — why */
@@ -330,16 +457,43 @@ function viewStep(pid, mid, sid) {
       h('span', { class: 'alg-play' }, '▶ تمرین')
     )));
 
-    const practiceHolder = h('div', { class: 'fig', style: 'max-width:230px' });
-    const practice = new CubeView(h('canvas'), { view: 'top', interactive: true });
-    practiceHolder.append(practice.canvas, h('figcaption', {}, 'جعبه تمرین · الگوریتم را کلیک کن'));
+    const practiceBox = h('div', { class: 'fig fig--practice' });
+
+    const practiceCanvas = h('canvas', { 'aria-label': 'جعبه تمرین' });
+    const practice = new CubeView(practiceCanvas, { view: 'top', interactive: true, duration: 300 });
     liveViews.push(practice);
+    const speedWrap = h('div', { class: 'fig__seg', role: 'group', 'aria-label': 'سرعت پخش' });
+    for (const sp of SPEEDS) {
+      const b = h('button', {
+        type: 'button', class: sp === 1 ? 'is-on' : '',
+        onclick: () => {
+          practice.setSpeed(sp);
+          [...speedWrap.children].forEach(c => c.classList.remove('is-on'));
+          b.classList.add('is-on');
+        },
+      }, sp === 0.5 ? '۰٫۵×' : sp === 1 ? '۱×' : '۲×');
+      speedWrap.append(b);
+    }
+    practiceBox.append(
+      h('div', { class: 'fig-top' }, h('span', {}, 'جعبه تمرین'), h('span', {}, 'الگوریتم را کلیک کن')),
+      h('div', { class: 'fig__stage' }, practiceCanvas),
+      h('div', { class: 'fig__bar' },
+        h('button', {
+          class: 'fig__btn', type: 'button', 'aria-label': 'برگرداندن مکعب تمرین',
+          onclick: () => { practice.stop(); practice.cube = new Cube(); practice.draw(); },
+        }, '↺'),
+        speedWrap,
+        h('button', {
+          class: 'fig__btn fig__btn--big', type: 'button',
+          onclick: () => openCubeModal({ alg: '', next: s.algorithms[0]?.alg, view: 'top', label: 'جعبه تمرین' }),
+        }, '⤢ بزرگ'))
+    );
     requestAnimationFrame(() => { practice.resize(); practice.draw(); });
+    const practiceHolder = practiceBox;
 
     body.append(h('div', { class: 'block' },
       h('div', { class: 'block__label' }, h('span', { class: 'n' }, '۴'), 'الگوریتم‌های این گام'),
-      h('div', { style: 'display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:14px;align-items:start' },
-        algs, practiceHolder),
+      h('div', { class: 'practice-grid' }, algs, practiceHolder),
       h('p', { style: 'font-size:12.5px;color:var(--ink-faint);margin-top:8px' },
         'روی هر الگوریتم کلیک کن تا روی جعبه تمرین اجرا شود. مکعب را با انگشت یا ماوس هم می‌توانی بچرخانی.')
     ));
@@ -467,21 +621,17 @@ function viewNotFound() {
 }
 
 /* --------------------------------------------------------------- playback */
+/* one shared token so clicking a second algorithm cancels the first */
 let playingToken = 0;
 async function playOn(alg, view) {
-  if (!view) return;
-  const token = ++playingToken;
-  const btnEls = $$('.alg.is-playing');
-  btnEls.forEach(b => b.classList.remove('is-playing'));
+  if (!view || !alg) return;
+  playingToken++;
+  const marks = $$('.alg.is-playing');
+  marks.forEach(b => b.classList.remove('is-playing'));
+  view.stop();
   view.cube = new Cube();
   view.draw();
-  const moves = alg.trim().split(/\s+/).filter(Boolean);
-  for (const mv of moves) {
-    if (token !== playingToken) return;
-    view.cube.move(mv);
-    view.draw();
-    await new Promise(r => setTimeout(r, 150));
-  }
+  await view.play(alg);
 }
 
 /* --------------------------------------------------------------- router */
