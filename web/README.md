@@ -95,6 +95,7 @@ node --check js/app.js && node --check js/cube-engine.js && node --check data/me
 node tools/cube/viewtest.js      # هندسه و انیمیشن رندر (بدون مرورگر): ۲۷ استیکر، چرخش واقعی، زوایا
 node tools/cube/geom.js          # سهم هر وجه در هر زاویه‌ی دوربین + نبود هم‌پوشانی
 node tools/cube/datacheck.js     # لینت محتوا: لینک مرده، گام ناقص، شناسه‌ی تکراری
+node tools/cube/algcheck.js      # متن صفحه = انیمیشن همان شکل
 node tools/cube/scenes-shot.js   # شیت PNG همه‌ی شکل‌ها، برای بازبینی چشمی
 node tools/cube/shot.js          # رندر PNG یک مکعب در چهار زاویه/میانه‌ی حرکت
 ```
