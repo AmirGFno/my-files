@@ -11,6 +11,7 @@
 | `shot.js` | رندر PNG بدون مرورگر (رستری‌ساز کوچک) برای بازبینی چشمی. |
 | `scenes-shot.js` | یک شیت از همه‌ی شکل‌های گام‌ها، تا با هم دیده شوند. |
 | `strip.js` | شش فریم از یک حرکت (`node strip.js R`) برای دیدن اینکه لایه واقعاً می‌چرخد. |
+| `algcheck.js` | متن صفحه و انیمیشن را با هم می‌سنجد: الگوریتم چاپ‌شده باید همان حرکتی باشد که شکل اجرا می‌کند. |
 | `datacheck.js` | لینت محتوا: شناسه‌ی تکراری، گام ناقص، الگوریتم خالی، لینک جایگزینِ مرده. |
 
 ```bash
@@ -18,6 +19,7 @@ node tools/cube/gen.js
 node tools/cube/viewtest.js
 node tools/cube/geom.js
 node tools/cube/datacheck.js
+node tools/cube/algcheck.js
 node tools/cube/scenes-shot.js   # → tools/cube/out/scenes-sheet.png
 ```
 
