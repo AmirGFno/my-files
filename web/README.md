@@ -5,9 +5,14 @@
 
 ## ساختار
 
-**نکته‌ی انتشار:** GitHub Pages روی ریشه‌ی همین برنچ سرو می‌شود، پس بعد از هر
-تغییر در `web/` باید `node tools/cube/sitecheck.js --sync` را بزنی (و
-`sitecheck.js` بدون `--sync` اختلاف را خطا می‌گیرد).
+**نکته‌ی انتشار:** GitHub Pages از پوشه‌ی `docs/` روی همین برنچ سرو می‌شود
+(آدرس: `https://amirgfno.github.io/my-files/`). بعد از هر تغییر در `web/` باید
+
+```bash
+node tools/cube/sitecheck.js --sync   # web/ → docs/
+```
+
+را بزنی؛ `sitecheck.js` بدون `--sync` اختلاف `docs/` و `web/` را خطا می‌گیرد.
 
 ```
 web/
