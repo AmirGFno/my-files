@@ -5,6 +5,10 @@
 
 ## ساختار
 
+**نکته‌ی انتشار:** GitHub Pages روی ریشه‌ی همین برنچ سرو می‌شود، پس بعد از هر
+تغییر در `web/` باید `node tools/cube/sitecheck.js --sync` را بزنی (و
+`sitecheck.js` بدون `--sync` اختلاف را خطا می‌گیرد).
+
 ```
 web/
 ├── index.html          پوسته‌ی اپ (topbar، main، footer)
@@ -96,6 +100,7 @@ node tools/cube/viewtest.js      # هندسه و انیمیشن رندر (بدو
 node tools/cube/geom.js          # سهم هر وجه در هر زاویه‌ی دوربین + نبود هم‌پوشانی
 node tools/cube/datacheck.js     # لینت محتوا: لینک مرده، گام ناقص، شناسه‌ی تکراری
 node tools/cube/algcheck.js      # متن صفحه = انیمیشن همان شکل
+node tools/cube/sitecheck.js     # نسخه‌ی منتشرشده با web/ یکی است
 node tools/cube/scenes-shot.js   # شیت PNG همه‌ی شکل‌ها، برای بازبینی چشمی
 node tools/cube/shot.js          # رندر PNG یک مکعب در چهار زاویه/میانه‌ی حرکت
 ```
