@@ -35,7 +35,7 @@ const CONTENT = {
                    'لبه در جای درست نیست — حتی اگر سفیدش رو به پایین باشد.',
               states: [
                 { label: 'شروع: مکعب به‌هم‌ریخته', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2', next: null, view: 'default' },
-                { label: 'دیزی: چهار سفید دور مرکز زرد', alg: 'R2 L2 F2 B2', next: 'R2 L2 F2 B2 R2 F2 B2 L2', view: 'top' },
+                { label: 'دیزی: چهار سفید دور مرکز زرد', alg: 'R2 L2 F2 B2', next: 'R2 F2 B2 L2', view: 'top' },
                 { label: 'صلیب سفید: هر لبه بالای مرکز هم‌رنگش', alg: 'R2 L2 F2 B2 R2 F2 B2 L2', next: null, view: 'bottom' },
               ],
               steps: [
@@ -46,7 +46,7 @@ const CONTENT = {
               ],
               algorithms: [
                 { alg: 'R2 L2 F2 B2', label: 'تمرین: ساخت دیزی از مکعب حل‌شده' },
-                { alg: 'R2 L2 F2 B2 F2 R2 B2 L2', label: 'تمرین: دیزی → صلیب سفید' },
+                { alg: 'R2 F2 B2 L2', label: 'تمرین: چهار جفت لبه را پایین بیاور (دیزی → صلیب)' },
               ],
               mistakes: [
                 'لبه‌ی سفید رو به بالا مانده: یک حرکت پایینش بیاور و از نو تطبیق بده.',
