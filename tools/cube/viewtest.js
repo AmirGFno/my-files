@@ -49,6 +49,12 @@ let queue = [];
 const raf = (fn) => { queue.push(fn); return queue.length; };
 const cancel = () => {};
 const tick = (ms) => { const q = queue; queue = []; q.forEach(fn => fn(ms)); };
+/* one animation frame, with a timestamp of the same clock the engine uses */
+const animate = () => {
+  const q = queue; queue = [];
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  q.forEach(fn => fn(now));
+};
 
 const isSticker = (c) => {
   if (!c || c.length !== 7) return false;
@@ -107,10 +113,13 @@ const anim = new V.CubeView(c2, { view: 'default', interactive: false, duration:
 anim.resize();
 c2.rec.polys.length = 0;
 anim.draw();
+/* the engine reads performance.now() to time moves, so the fake clock below has
+   to hand out the same kind of number */
+const realNow = (typeof performance !== 'undefined' && performance.now) ? performance.now.bind(performance) : Date.now;
 const done = new Promise((resolve) => {
   anim._resolve = resolve;
   anim.queue = [{ tok: 'R', i: 0, n: 1 }];
-  anim._tick(0);
+  anim._tick(realNow());
 });
 
 /* first frame: nothing committed yet, but the layer must already be rotated */
@@ -125,17 +134,19 @@ const snapshot = () => {
   return out;
 };
 c2.rec.polys.length = 0;
-tick(30);
+animate();                       // let the browser-clock pass a frame
 const s1 = snapshot();
 c2.rec.polys.length = 0;
-tick(60);
+animate();
 const s2 = snapshot();
 const changed = s1.filter((p, i) => p !== s2[i]).length;
 console.log('   frames: s1=' + s1.length + ' s2=' + s2.length + ' differing=' + changed);
 check('mid-move: stickers are actually rotating frame to frame', changed > 0, `changed=${changed}`);
 check('mid-move: only the R-layer stickers move', changed <= 26, `changed=${changed}`);
 
-tick(200);
+/* fast-forward past the move duration on the same clock */
+const until = realNow() + 400;
+while (realNow() < until) { animate(); }
 check('move commits after its duration', !anim.cube.solved());
 check('animation finished and cleared', anim.anim === null);
 done.then(() => console.log('   promise resolved'));
