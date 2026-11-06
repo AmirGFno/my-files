@@ -38,32 +38,66 @@ def daisy_ok(c: Cube) -> bool:
     return whites == 4 and centre_yellow
 
 
-def cross_ok(c: Cube, face: str = "D") -> bool:
-    axis = {"U": 1, "D": 1, "R": 0, "L": 0, "F": 2, "B": 2}[face]
-    layer = 1 if face in "URF" else -1
-    edges = [(0, 1, 0)] if False else None
-    ok = True
-    for p, v in c.st.items():
-        if p[axis] != layer:
-            continue
-        if sum(1 for q in p if q != 0) != 1:       # edges only
-            continue
-        if v.get(face) != face:
-            ok = False
-    # side stickers of those edges must match their centres
-    for p, v in c.st.items():
-        if p[axis] != layer or sum(1 for q in p if q != 0) != 1:
-            continue
-        for f, col in v.items():
+CENTRE = {"U": (0, 1, 0), "D": (0, -1, 0), "R": (1, 0, 0),
+          "L": (-1, 0, 0), "F": (0, 0, 1), "B": (0, 0, -1)}
+AXIS = {"U": 1, "D": 1, "R": 0, "L": 0, "F": 2, "B": 2}
+SIGN = {"U": 1, "D": -1, "R": 1, "L": -1, "F": 1, "B": -1}
+
+
+def layer_cubies(c: Cube, face: str):
+    ax, sg = AXIS[face], SIGN[face]
+    return [p for p in c.st if p[ax] == sg]
+
+
+def kind(pos) -> str:
+    """'centre' | 'edge' | 'corner' — by how many coordinates are zero."""
+    zeros = sum(1 for q in pos if q == 0)
+    return {1: "edge", 2: "corner", 3: "centre"}.get(zeros, "?")
+
+
+def is_cross(c: Cube, face: str = "D", colour: str = None) -> bool:
+    """Strict cross test.
+
+    Exactly the four edge cubies of the layer carry `colour` on `face`, no corner
+    does, and every edge side-sticker matches its own centre colour.
+    """
+    colour = colour or face
+    edges = [p for p in layer_cubies(c, face) if kind(p) == "edge"]
+    if len(edges) != 4:
+        return False
+    for p in edges:
+        if c.st[p].get(face) != colour:
+            return False
+        for f, col in c.st[p].items():
             if f == face:
                 continue
-            centre = [0, 0, 0]
-            centre[{"x": 0, "y": 1, "z": 2}[f.lower()]] = 0
-            cpos = {"U": (0, 1, 0), "D": (0, -1, 0), "R": (1, 0, 0),
-                    "L": (-1, 0, 0), "F": (0, 0, 1), "B": (0, 0, -1)}[f]
-            if c.st[cpos][f] != col:
-                ok = False
-    return ok
+            if c.st[CENTRE[f]].get(f) != col:      # side must match its centre
+                return False
+    return True
+
+
+def is_daisy(c: Cube, top: str = "U", colour: str = "D") -> bool:
+    """Strict daisy test: centre is the top colour, four edges show `colour` up."""
+    if c.st[CENTRE[top]].get(top) != top:
+        return False
+    edges = [p for p in layer_cubies(c, top) if kind(p) == "edge"]
+    corners = [p for p in layer_cubies(c, top) if kind(p) == "corner"]
+    if len(edges) != 4:
+        return False
+    if sum(1 for p in edges if c.st[p].get(top) == colour) != 4:
+        return False
+    if sum(1 for p in corners if c.st[p].get(top) == colour):
+        return False
+    return True
+
+
+# keep the old names working
+def cross_ok(c: Cube, face: str = "D") -> bool:
+    return is_cross(c, face)
+
+
+def daisy_ok(c: Cube) -> bool:
+    return is_daisy(c)
 
 
 if __name__ == "__main__":

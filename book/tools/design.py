@@ -56,6 +56,7 @@ class Doc:
         if self.page:
             self.c.showPage()
         self.page += 1
+        typo.set_page(self.page)
         c = self.c
         c.setFillColorRGB(*PAPER)
         c.rect(0, 0, PAGE[0], PAGE[1], stroke=0, fill=1)
@@ -87,6 +88,12 @@ class Doc:
         c.setFont(typo.font("semibold"), 9.5)
         c.setFillColorRGB(*INK_SOFT)
         c.drawCentredString(x, MARGIN_BOT - 42, _fa_digits(str(self.page)))
+
+    def check(self):
+        """Layout lint: nothing may cross the page margins."""
+        head_y = PAGE[1] - MARGIN_TOP + 26          # running head sits above this
+        return typo.report((MARGIN_OUT - 1, PAGE[0] - MARGIN_OUT + 1,
+                            MARGIN_BOT - 6, head_y + 2))
 
     def save(self):
         self.c.showPage()

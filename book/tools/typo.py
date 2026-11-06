@@ -110,10 +110,14 @@ def draw_paragraph(c, x: float, y: float, text: str, width: float, size: float,
     for ln in lines:
         if align == "right":
             c.drawRightString(x + width, cy, ln.text)
+            _record(x + width - ln.width, x + width, cy, cy - size * (leading - 1), text)
         elif align == "center":
             c.drawCentredString(x + width / 2, cy, ln.text)
+            _record(x + width / 2 - ln.width / 2, x + width / 2 + ln.width / 2, cy,
+                    cy - size * (leading - 1), text)
         else:
             c.drawString(x, cy, ln.text)
+            _record(x, x + ln.width, cy, cy - size * (leading - 1), text)
         cy -= size * leading
     return cy
 
@@ -182,3 +186,62 @@ def draw_numerals(c, x: float, y: float, s: str, size: float, weight: str = "reg
         c.drawCentredString(x, y, out)
     else:
         c.drawString(x, y, out)
+
+
+# ------------------------------------------------------------------ measuring
+def text_height(text: str, width: float, size: float, weight: str = "regular",
+                leading: float = 1.9) -> float:
+    if not text:
+        return 0.0
+    return len(wrap_paragraph(text, width, size, weight)) * size * leading
+
+
+def fit_size(text: str, width: float, weight: str = "bold", start: float = 28,
+             minimum: float = 14, leading: float = 1.4) -> float:
+    """Largest font size at which `text` wraps into at most two lines."""
+    s = start
+    while s > minimum:
+        if len(wrap_paragraph(text, width, s, weight)) <= 2:
+            return s
+        s -= 1
+    return minimum
+
+
+def one_line_width(text: str, width: float, size: float, weight="regular") -> float:
+    """Shrink `size` until `text` fits on one line."""
+    s = size
+    while s > 5:
+        if len(wrap_paragraph(text, width, s, weight)) == 1:
+            return s
+        s -= 0.5
+    return 5
+
+
+# ------------------------------------------------------------------ layout lint
+TRACE: list = []          # (page, x_left, x_right, y_baseline, bottom_y, text)
+_PAGE = [0]
+
+
+def set_page(n: int) -> None:
+    _PAGE[0] = n
+    TRACE.clear()
+
+
+def _record(x0, x1, y, bottom, text):
+    TRACE.append((_PAGE[0], x0, x1, y, bottom, text))
+
+
+def report(bounds) -> list:
+    """Return human-readable layout violations for the current page."""
+    x_min, x_max, y_min, y_max = bounds
+    out = []
+    for page, x0, x1, y, bottom, text in TRACE:
+        if bottom < y_min - 0.5:
+            out.append(f"page {page}: text below the bottom margin ({bottom:.0f} < {y_min:.0f}): {text[:40]}")
+        if y > y_max + 0.5:
+            out.append(f"page {page}: text above the top margin ({y:.0f} > {y_max:.0f}): {text[:40]}")
+        if x1 > x_max + 0.5:
+            out.append(f"page {page}: text past the right margin ({x1:.0f} > {x_max:.0f}): {text[:40]}")
+        if x0 < x_min - 0.5:
+            out.append(f"page {page}: text past the left margin ({x0:.0f} < {x_min:.0f}): {text[:40]}")
+    return out

@@ -20,7 +20,7 @@ Vec = Tuple[float, float, float]
 CUBIE = 1.0              # cubie edge
 HALF = 1.5               # half of the whole cube
 STICKER = 0.415          # half-size of a sticker (leaves the plastic border)
-LIGHT = {"U": 1.00, "F": 0.90, "R": 0.76, "D": 0.94, "B": 0.84, "L": 0.70}
+LIGHT = {"U": 1.00, "F": 0.93, "R": 0.82, "D": 0.96, "B": 0.88, "L": 0.78}
 
 AXES = ("x", "y", "z")
 
@@ -68,6 +68,19 @@ def _proj(v: Vec, basis) -> Tuple[float, float, float]:
 
 def _shade(color, f: float):
     return tuple(min(1.0, max(0.0, c * f)) for c in color)
+
+
+def _mix(a, b, t: float):
+    return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
+
+
+def _lighten(color, amount: float):
+    """Soft highlight: lift toward white without washing the colour out."""
+    return _mix(color, (1.0, 1.0, 1.0), amount)
+
+
+def _darken(color, amount: float):
+    return _mix(color, (0.06, 0.06, 0.08), amount)
 
 
 # ------------------------------------------------------------------ geometry
@@ -149,6 +162,45 @@ def _keep(face: str, colour: str, highlight, highlight_by: str) -> bool:
     return colour in highlight
 
 
+# ------------------------------------------------------------------ shading
+def _light_dir(basis) -> Tuple[float, float]:
+    """2D direction (screen space) that light appears to come from."""
+    return (-0.42, 0.91)
+
+
+def _gradient_colors(base, face: str):
+    """Sticker gradient: lit corner -> shadowed corner, per face orientation."""
+    lit = _lighten(base, 0.16)
+    shaded = _darken(base, 0.10 if face in "UF" else 0.17)
+    return lit, shaded
+
+
+def _rounded_poly_path(c, pts, radius: float = 2.2):
+    """Build a ReportLab path for a convex quad with slightly rounded corners."""
+    n = len(pts)
+    path = c.beginPath()
+    for i in range(n):
+        p0 = pts[i]
+        p1 = pts[(i + 1) % n]
+        p_1 = pts[(i - 1) % n]
+        v0 = (p0[0] - p_1[0], p0[1] - p_1[1])
+        v1 = (p1[0] - p0[0], p1[1] - p0[1])
+        l0 = max(1e-6, (v0[0] ** 2 + v0[1] ** 2) ** 0.5)
+        l1 = max(1e-6, (v1[0] ** 2 + v1[1] ** 2) ** 0.5)
+        r = min(radius, l0 / 2.2, l1 / 2.2)
+        start = (p0[0] - v0[0] / l0 * r, p0[1] - v0[1] / l0 * r)
+        end = (p0[0] + v1[0] / l1 * r, p0[1] + v1[1] / l1 * r)
+        if i == 0:
+            path.moveTo(*start)
+        else:
+            path.lineTo(*start)
+        path.curveTo(p0[0] - v0[0] / l0 * r * 0.45, p0[1] - v0[1] / l0 * r * 0.45,
+                     p0[0] + v1[0] / l1 * r * 0.45, p0[1] + v1[1] / l1 * r * 0.45,
+                     *end)
+    path.close()
+    return path
+
+
 # ------------------------------------------------------------------ PDF
 def draw_cube(c, x: float, y: float, size: float, cube: Optional[Cube] = None,
               view: str = "default", highlight_by: str = "face",
@@ -172,16 +224,19 @@ def draw_cube(c, x: float, y: float, size: float, cube: Optional[Cube] = None,
     hull = _hull(hull_pts)
 
     if shadow:
-        sh = _hull([(px + size * 0.03, py + size * 0.045) for px, py in hull_pts])
-        c.saveState()
-        c.setFillColorRGB(0.87, 0.88, 0.91)
-        p = c.beginPath()
-        p.moveTo(*at2(*sh[0]))
-        for q in sh[1:]:
-            p.lineTo(*at2(*q))
-        p.close()
-        c.drawPath(p, stroke=0, fill=1)
-        c.restoreState()
+        # soft contact shadow under the cube: stacked, faint ellipses
+        hx = [p[0] for p in hull_pts]
+        hy = [p[1] for p in hull_pts]
+        cx = (min(hx) + max(hx)) / 2
+        w = (max(hx) - min(hx)) * 0.54
+        h = size * 0.032
+        cy = min(hy) - size * 0.020
+        for k, a in ((1.0, 0.05), (0.78, 0.06), (0.55, 0.07)):
+            c.saveState()
+            c.setFillColorRGB(0.14, 0.16, 0.20, alpha=a)
+            c.ellipse(x + cx - w * k, y + cy - h * k, x + cx + w * k, y + cy + h * k,
+                      stroke=0, fill=1)
+            c.restoreState()
 
     if body:
         c.saveState()
@@ -194,19 +249,39 @@ def draw_cube(c, x: float, y: float, size: float, cube: Optional[Cube] = None,
         c.drawPath(p, stroke=0, fill=1)
         c.restoreState()
 
+    ldx, ldy = _light_dir(basis)
     for pts, colour, face in _visible_stickers(cube, basis):
         base = COLORS.get(colour, GREY)
         if not _keep(face, colour, highlight, highlight_by):
             base = GREY
-        col = _shade(base, LIGHT[face])
+        base = _shade(base, LIGHT[face])
+        screen = [at2(*project(p)) for p in pts]
+        xs = [q[0] for q in screen]
+        ys = [q[1] for q in screen]
+        x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+        lit, dark = _gradient_colors(base, face)
+        radius = max(1.0, size * 0.020)
+
+        # sticker = rounded quad, filled with a gradient clipped to the shape
         c.saveState()
-        c.setFillColorRGB(*col, alpha=alpha)
-        p = c.beginPath()
-        p.moveTo(*at2(*project(pts[0])))
-        for q in pts[1:]:
-            p.lineTo(*at2(*project(q)))
-        p.close()
-        c.drawPath(p, stroke=0, fill=1)
+        path = _rounded_poly_path(c, screen, radius=radius)
+        c.clipPath(path, stroke=0, fill=0)
+        if ldx >= 0:
+            gx0, gy0, gx1, gy1 = x0, y0, x1, y1
+        else:
+            gx0, gy0, gx1, gy1 = x1, y0, x0, y1
+        try:
+            c.linearGradient(gx0, gy0, gx1, gy1, (lit, dark), (0, 1))
+        except Exception:
+            c.setFillColorRGB(*base)
+            c.rect(x0 - 2, y0 - 2, x1 - x0 + 4, y1 - y0 + 4, stroke=0, fill=1)
+        c.restoreState()
+
+        # thin darker edge so neighbouring stickers of the same colour stay apart
+        c.saveState()
+        c.setStrokeColorRGB(*_darken(base, 0.45))
+        c.setLineWidth(max(0.35, size * 0.004))
+        c.drawPath(_rounded_poly_path(c, screen, radius=radius), stroke=1, fill=0)
         c.restoreState()
 
 
