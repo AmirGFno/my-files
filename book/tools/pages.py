@@ -49,7 +49,7 @@ def kicker(c, xr, y, text, width=None, color=None, size=8.4):
     tick(c, xr, y, color or ACCENT)
     typo.draw_paragraph(c, xr - width + 9, y, text, width - 12, size, weight="semibold",
                         align="right", color=color or ACCENT)
-    return y - 19
+    return y - 16
 
 
 def heading(d, x, y, text, width=None, size=24, max_lines=2):
@@ -127,9 +127,9 @@ def algs_block(d, x, y, width, items, color=None):
         c.roundRect(x + width - 3.2, y - h, 3.2, h, 1.5, stroke=0, fill=1)
         aw = typo.latin_width(alg, 10.0)
         d.alg(x + 10, y - h + 13.5, alg, size=10.0, color=color or NAVY)
-        lx = x + 10 + aw + 12
-        lw = (x + width - 10) - lx
-        if lw > 26:
+        lx = x + 10 + aw + 14
+        lw = (x + width - 12) - lx
+        if lw > 30:
             typo.draw_paragraph(c, lx, y - h + 13.5, label, lw, 7.8,
                                 align="right", color=INK_FAINT)
         y -= h + 4
@@ -180,16 +180,10 @@ def table(d, x, y, width, header, rows, weights, align=None, size=8.4, rh=21,
             c.setFillColorRGB(0.973, 0.975, 0.981)
             c.rect(x, y - rh + 6, width, rh, stroke=0, fill=1)
         for ci, cell in enumerate(row):
-            numeric = all(ch in "0123456789۰۱۲۳۴۵۶۷۸۹٪%.,–- " for ch in cell)
-            if numeric:
-                typo.draw_numerals(c, rights[ci] - 6, y - rh + 13.5, cell, size,
-                                   align=align[ci] if align[ci] != "center" else "center",
-                                   color=ACCENT if ci == accent_col else INK_SOFT)
-            else:
-                typo.draw_paragraph(c, rights[ci] - ws[ci] + 6, y - rh + 13.5, cell,
-                                    ws[ci] - 12, size, align=align[ci],
-                                    color=ACCENT if ci == accent_col else
-                                    (INK if ci == 0 else INK_SOFT))
+            colr = ACCENT if ci == accent_col else (INK if ci == 0 else INK_SOFT)
+            typo.draw_smart(c, rights[ci] - 6, y - rh + 13.5, cell, size,
+                            weight="medium" if ci == 0 else "regular",
+                            align=align[ci], color=colr)
         y -= rh
     rule(c, x, y + 6, width)
     return y
@@ -230,7 +224,7 @@ def page_map(d: Doc):
     y = TOP
 
     kicker(c, MARGIN_IN + CONTENT_W, y, "راهنمای خواندن · یک صفحه")
-    y = heading(d, MARGIN_IN, y - 26, "از کجا شروع کنم؟", size=27)
+    y = heading(d, MARGIN_IN, y - 40, "از کجا شروع کنم؟", size=27)
     y = lead(d, MARGIN_IN, y - 4,
              "این کتاب چند مسیر دارد و مسیرها را نباید قاطی کرد: اول تازه‌کار شو، بعد مسیر خودت را "
              "انتخاب کن. مسیر سبز فقط سه فصل لازم دارد.", CONTENT_W * 0.70) - 20
@@ -298,9 +292,12 @@ def page_map(d: Doc):
                                  color=INK_FAINT, leading=1.75) - 6.5
 
     # reading path (left)
-    card2 = 190
+    card2 = 206
     c.setFillColorRGB(0.975, 0.977, 0.982)
     c.roundRect(lx, y - card2, lw, card2, 8, stroke=0, fill=1)
+    typo.draw_paragraph(c, lx + 12, y - card2 + 12,
+                        "عدد کنار هر پله، صفحه‌ی همان بخش در کتاب است.",
+                        lw - 24, 7.0, align="right", color=INK_FAINT)
     typo.draw_paragraph(c, lx + 12, y - 21, "مسیر خواندن", lw - 24, 9.2, weight="bold",
                         align="right", color=INK)
     path = [
@@ -326,7 +323,7 @@ def page_map(d: Doc):
         typo.draw_paragraph(c, tx, yy + 6, t, tw, 8.6, weight="medium", align="right",
                             color=INK)
         typo.draw_paragraph(c, tx, yy - 5, s_, tw, 7.4, align="right", color=INK_FAINT)
-        typo.draw_numerals(c, tx, yy - 17, pg, 7.2, align="left", color=col)
+        typo.draw_smart(c, tx + tw, yy - 17, pg, 7.2, align="left", color=col)
 
     y = min(yr, y - card2) - 20
     c.setFillColorRGB(*NAVY)
@@ -352,7 +349,7 @@ def page_step(d: Doc):
 
     y = kicker(c, MARGIN_IN + CONTENT_W, y, "بخش ۱ · هدف این گام", CONTENT_W,
                color=LEVEL["beginner"])
-    y = heading(d, MARGIN_IN, y - 6, "صلیب سفید را از «دیزی» بساز", size=22)
+    y = heading(d, MARGIN_IN, y - 22, "صلیب سفید را از «دیزی» بساز", size=22)
     y = lead(d, MARGIN_IN, y - 3,
              "در پایان این صفحه: چهار لبه‌ی سفید در لایه‌ی پایین، هر کدام بالای مرکز هم‌رنگ خودش.",
              CONTENT_W * 0.78) - 14
@@ -362,7 +359,7 @@ def page_step(d: Doc):
         ("۲. دیزی", scene(DAISY), "top"),
         ("۳. صلیب کامل", scene(CROSS), "bottom"),
     ])
-    y -= 4
+    y -= 10
 
     right, left = cols([CONTENT_W * 0.56 - 22, CONTENT_W * 0.44])
     rx, rw = right
@@ -398,8 +395,9 @@ def page_step(d: Doc):
         ("F2 R2", "دیزی دو حرکتی"),
         ("D2", "برگرداندن دیزی"),
     ]) - 4
+    yl -= 2
     yl = kicker(c, lx + lw, yl, "بخش ۵ · اگر گیر کردی", lw, color=(0.74, 0.24, 0.15))
-    yl = callout(d, lx, yl + 2, lw, "دو خطای رایج",
+    yl = callout(d, lx, yl - 4, lw, "دو خطای رایج",
                  "۱) لبه‌ی سفید رو به بالا مانده: یک حرکت پایینش بیاور و از نو تطبیق بده.  "
                  "۲) دیزی کامل است ولی صلیب کج است: هر لبه را جداگانه پایین بیاور.",
                  kind="warn")
@@ -422,8 +420,8 @@ def page_step(d: Doc):
     typo.draw_paragraph(c, MARGIN_IN + 14, y - 20,
                         "تمام شد؟ گام بعدی: چهار گوشه‌ی سفید را جا بینداز", CONTENT_W - 110,
                         9.0, weight="medium", align="right", color=INK)
-    typo.draw_numerals(c, MARGIN_IN + CONTENT_W - 16, y - 20, "ص ۳۸", 8.6,
-                       weight="semibold", align="right", color=ACCENT)
+    typo.draw_smart(c, MARGIN_IN + CONTENT_W - 16, y - 20.5, "ص ۳۸", 8.6,
+                    weight="semibold", align="right", color=ACCENT)
     return d
 
 
@@ -433,7 +431,7 @@ def page_workshop(d: Doc):
 
     y = TOP
     y = kicker(c, MARGIN_IN + CONTENT_W, y, "پایان فصل ۲ · بخش ۲.۹", CONTENT_W)
-    y = heading(d, MARGIN_IN, y - 4, "کارگاه روش‌های جایگزین", size=23)
+    y = heading(d, MARGIN_IN, y - 20, "کارگاه روش‌های جایگزین", size=23)
     y = lead(d, MARGIN_IN, y - 3,
              "در فصل ۲ برای هر گام یک روش یاد گرفتی. اینجا همان گام‌ها را با تکنیک‌های دیگر "
              "مقایسه می‌کنی. هر ردیف یک گام است؛ از راست به چپ بخوان.", CONTENT_W * 0.80) - 16
@@ -491,10 +489,10 @@ def page_workshop(d: Doc):
                                 align="right", color=INK)
             typo.draw_paragraph(c, rights[2] - ws[2] + 4, y + 0.5, why, ws[2] - 8, 7.6,
                                 align="right", color=INK_FAINT)
-            typo.draw_numerals(c, rights[3] - 4, y + 0.5, moves, 7.8, align="right",
-                               color=INK_SOFT)
-            typo.draw_numerals(c, rights[4] - 4, y + 0.5, "ص " + page, 8.0,
-                               weight="medium", align="right", color=ACCENT)
+            typo.draw_smart(c, rights[3] - 6, y + 0.5, moves, 7.8, align="center",
+                            color=INK_SOFT)
+            typo.draw_smart(c, rights[4] - 6, y + 0.5, "ص " + page, 8.0,
+                            weight="medium", align="center", color=ACCENT)
             y -= 20
             rule(c, MARGIN_IN, y + 5, CONTENT_W)
         y -= 10

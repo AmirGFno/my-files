@@ -174,6 +174,43 @@ def numerals(text: str) -> str:
     return _ar.reshape(text)
 
 
+_FA_DIGITS = set("۰۱۲۳۴۵۶۷۸۹٪،؛؟")
+
+
+def _has_letters(s: str) -> bool:
+    """True only for real Persian letters — digits and punctuation don't count."""
+    return any("\u0600" <= ch <= "\u06ff" and ch not in _FA_DIGITS for ch in s)
+
+
+def smart(s: str) -> str:
+    """Right string for mixed content.
+
+    * contains Persian letters  -> full bidi (so "ص ۳۶" prints as «ص ۳۶»)
+    * pure digits/punctuation   -> keep logical order (so "۱۲–۱۶" is not mirrored)
+    """
+    return visual(s) if _has_letters(s) else numerals(s)
+
+
+def draw_smart(c, x: float, y: float, s: str, size: float, weight: str = "regular",
+               align: str = "right", color=(0.36, 0.38, 0.43)) -> float:
+    """Draw mixed Persian/number text correctly aligned. Returns its width."""
+    fname = font(weight)
+    c.setFont(fname, size)
+    c.setFillColorRGB(*color)
+    out = smart(s)
+    w = pdfmetrics.stringWidth(out, fname, size)
+    if align == "right":
+        c.drawRightString(x, y, out)
+    elif align == "center":
+        c.drawCentredString(x, y, out)
+    else:
+        c.drawString(x, y, out)
+    _record(x - w if align == "right" else (x - w / 2 if align == "center" else x),
+            x if align == "right" else (x + w / 2 if align == "center" else x + w),
+            y, y - size * 0.75, s)
+    return w
+
+
 def draw_numerals(c, x: float, y: float, s: str, size: float, weight: str = "regular",
                   align: str = "right", color=(0.36, 0.38, 0.43)) -> None:
     fname = font(weight)
