@@ -153,3 +153,32 @@ def para_height(text: str, width: float, size: float, weight: str = "regular",
                 leading: float = 1.9) -> float:
     """Height in points that draw_paragraph will consume for this text."""
     return len(wrap_paragraph(text, width, size, weight)) * size * leading
+
+
+# ------------------------------------------------------------------ numerals
+_DIGITS = set("0123456789۰۱۲۳۴۵۶۷۸۹٪%.,")
+
+
+def numerals(text: str) -> str:
+    """Draw-ready string for text that is mostly digits/punctuation.
+
+    In a right-to-left paragraph a number like Page 36 must be mirrored by bidi;
+    standalone numbers (table cells, ranges, counters) keep their logical order,
+    otherwise "۱۲–۱۶" would print as "۱۶–۱۲".
+    """
+    import arabic_reshaper as _ar
+    return _ar.reshape(text)
+
+
+def draw_numerals(c, x: float, y: float, s: str, size: float, weight: str = "regular",
+                  align: str = "right", color=(0.36, 0.38, 0.43)) -> None:
+    fname = font(weight)
+    c.setFont(fname, size)
+    c.setFillColorRGB(*color)
+    out = numerals(s)
+    if align == "right":
+        c.drawRightString(x, y, out)
+    elif align == "center":
+        c.drawCentredString(x, y, out)
+    else:
+        c.drawString(x, y, out)

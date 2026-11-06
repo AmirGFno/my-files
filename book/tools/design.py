@@ -66,26 +66,27 @@ class Doc:
         return c
 
     def _running_head(self, running: str, chapter: str):
+        """Single centred running head: 'chapter · running' in the outer margin area."""
         c = self.c
         y = PAGE[1] - MARGIN_TOP + 26
         c.setStrokeColorRGB(*RULE)
         c.setLineWidth(0.6)
-        c.line(MARGIN_IN, y - 9, PAGE[0] - MARGIN_OUT, y - 9)
-        if chapter:
-            typo.draw_paragraph(c, MARGIN_IN, y, chapter, CONTENT_W / 2, 8,
-                                weight="medium", align="right", color=INK_FAINT)
-        if running:
-            typo.draw_paragraph(c, MARGIN_IN + CONTENT_W / 2, y, running, CONTENT_W / 2,
-                                8, weight="regular", align="left", color=INK_FAINT)
+        c.line(MARGIN_IN, y - 10, PAGE[0] - MARGIN_OUT, y - 10)
+        parts = [p for p in (chapter, running) if p]
+        if parts:
+            label = " · ".join(parts)
+            typo.draw_paragraph(c, MARGIN_IN, y, label, CONTENT_W, 7.8, weight="regular",
+                                align="center", color=INK_FAINT)
 
     def _folio(self):
         c = self.c
-        c.setFont(typo.font("medium"), 8.5)
-        c.setFillColorRGB(*INK_FAINT)
-        # Persian books put folio on the outer edge; keep it simple and centred-out
-        c.drawCentredString(PAGE[0] - MARGIN_OUT - 12, MARGIN_BOT - 26, _fa_digits(str(self.page)))
+        x = MARGIN_OUT / 2           # outer (left) margin in a right-to-left book
         c.setStrokeColorRGB(*RULE)
         c.setLineWidth(0.6)
+        c.line(x - 8, MARGIN_BOT - 30, x + 8, MARGIN_BOT - 30)
+        c.setFont(typo.font("semibold"), 9.5)
+        c.setFillColorRGB(*INK_SOFT)
+        c.drawCentredString(x, MARGIN_BOT - 42, _fa_digits(str(self.page)))
 
     def save(self):
         self.c.showPage()

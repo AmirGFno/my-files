@@ -16,7 +16,17 @@ import arabic_reshaper
 
 _ARABIC = set(range(0x0600, 0x0700)) | set(range(0xFB50, 0xFDFF)) | set(range(0xFE70, 0xFEFF))
 
-_LTR_CHUNK = re.compile(r"[A-Za-z0-9'’()\[\]+\-=×/.%:]+(?: [A-Za-z0-9'’()\[\]+\-=×/.%:]+)*")
+_LTR_CHUNK = re.compile(r"[A-Za-z0-9'\u200f()\[\]+\-=×/.%:]+(?: [A-Za-z0-9'\u200f()\[\]+\-=×/.%:]+)*")
+
+# L4: characters that must be MIRRORED when they sit in a right-to-left run.
+# Without this, brackets and quotes come out reversed: (پیشنهادی) -> )پیشنهادی(
+MIRROR = {
+    "(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{",
+    "<": ">", ">": "<", "«": "»", "»": "«",
+    "\u2039": "\u203a", "\u203a": "\u2039",
+    "\u2190": "\u2192", "\u2192": "\u2190",   # arrows
+    "\u2264": "\u2265", "\u2265": "\u2264",
+}
 
 
 def _cls(ch: str) -> str:
@@ -116,11 +126,28 @@ def _levels(tokens: list[str], base: int = 1) -> list[int]:
     return levels
 
 
+def _mirror(tokens: list[str], levels: list[int]) -> list[str]:
+    """Apply Unicode mirroring (L4) to neutral characters in RTL runs.
+
+    Tokens that are whole Latin/algebra chunks keep their own order and their own
+    brackets, so `(R U R' U')` is never mirrored.
+    """
+    out = []
+    for tok, lvl in zip(tokens, levels):
+        atomic = len(tok) > 1 and _LTR_CHUNK.fullmatch(tok)
+        if atomic or lvl % 2 == 0:
+            out.append(tok)
+        else:
+            out.append(MIRROR.get(tok, tok))
+    return out
+
+
 def visual(text: str) -> str:
     if not text:
         return ""
     tokens = _tokenize(_shape_runs(text))
     levels = _levels(tokens)
+    tokens = _mirror(tokens, levels)
     highest = max(levels) if levels else 1
     lowest_odd = min([l for l in levels if l % 2 == 1], default=1)
     for lvl in range(highest, lowest_odd - 1, -1):
