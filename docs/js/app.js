@@ -68,10 +68,13 @@ function mountCube(parent, opts = {}) {
 /* a small cube figure with its own controls: this is the "one figure, two
    sizes" unit used on every step page */
 const SPEEDS = [0.5, 1, 2];
-const VIEW_LABELS = { default: 'سه‌رخ', top: 'از بالا', bottom: 'از پایین', front: 'از جلو' };
+const VIEW_LABELS = { default: 'سه‌رخ', top: 'از بالا', bottom: 'از پایین', front: 'از جلو', back: 'از پشت' };
 /* short labels keep the control bar inside a narrow figure column */
-const VIEW_SHORT = { default: 'سه‌رخ', top: 'بالا', bottom: 'پایین', front: 'جلو' };
+const VIEW_SHORT = { default: 'سه‌رخ', top: 'بالا', bottom: 'پایین', front: 'جلو', back: 'پشت' };
 
+/* One step figure is shown twice: small, to see the shape of the case, and
+   large enough to follow a single layer turning. Both are the same cube and the
+   same animation — only the canvas and the controls differ. */
 function cubeFigure({ label, alg, next, view, small = true, maxWidth = 220 }) {
   const holder = h('div', { class: `fig ${small ? 'fig--small' : 'fig--big'}` });
   const canvas = h('canvas', { 'aria-label': label || 'نمای سه‌بعدی مکعب' });
@@ -131,7 +134,7 @@ function cubeFigure({ label, alg, next, view, small = true, maxWidth = 220 }) {
 
   const viewWrap = h('div', { class: 'fig__seg', role: 'group', 'aria-label': 'زاویهٔ دوربین' });
   let currentView = view || 'default';
-  for (const name of ['default', 'top', 'bottom', 'front']) {
+  for (const name of ['default', 'top', 'bottom', 'front', 'back']) {
     const b = h('button', {
       type: 'button', class: name === currentView ? 'is-on' : '',
       title: `نمای ${VIEW_LABELS[name]}`, 'aria-label': `نمای ${VIEW_LABELS[name]}`,
@@ -152,13 +155,21 @@ function cubeFigure({ label, alg, next, view, small = true, maxWidth = 220 }) {
     onclick: () => openCubeModal({ alg, next, view: currentView, label, speed }),
   }, '⤢ بزرگ');
 
-
   bar.append(...[playBtn, resetBtn, bigBtn].filter(Boolean));
   holder.append(bar, h('div', { class: 'fig__bar fig__bar--seg' }, speedWrap, viewWrap), live);
   if (next) holder.append(h('figcaption', { dir: 'ltr', class: 'fig__alg' }, next));
   liveViews.push(view3d);
   requestAnimationFrame(() => { view3d.resize(); view3d.draw(); });
   return holder;
+}
+
+/** a step figure in both sizes, side by side: the small one for the shape of the
+ *  case, the big one for watching the layer turn */
+function figurePair(opts) {
+  return h('div', { class: 'figpair' },
+    cubeFigure({ ...opts, small: true, maxWidth: 200, label: `${opts.label} — کوچک` }),
+    cubeFigure({ ...opts, small: false, maxWidth: 420, label: `${opts.label} — بزرگ` })
+  );
 }
 
 /* big mode: same cube, same animation, a much larger canvas */
@@ -183,12 +194,43 @@ function openCubeModal({ alg, next, view, label, speed = 1 }) {
     class: 'btn btn--primary', type: 'button',
     onclick: async () => { if (next) await big.play(next); },
   }, next ? '▶ اجرای گام' : '—');
+
+  /* in the big view the same three controls exist, so the reader can turn the
+     cube to any angle and slow the turn down to watch a single layer */
+  const bigSpeeds = h('div', { class: 'fig__seg', role: 'group', 'aria-label': 'سرعت پخش' });
+  for (const sp of SPEEDS) {
+    const b = h('button', {
+      type: 'button', class: sp === speed ? 'is-on' : '', 'aria-label': `سرعت ${sp} برابر`,
+      onclick: () => {
+        big.setSpeed(sp);
+        [...bigSpeeds.children].forEach(c => c.classList.remove('is-on'));
+        b.classList.add('is-on');
+      },
+    }, sp === 0.5 ? '۰٫۵×' : sp === 1 ? '۱×' : '۲×');
+    bigSpeeds.append(b);
+  }
+  const bigViews = h('div', { class: 'fig__seg', role: 'group', 'aria-label': 'زاویهٔ دوربین' });
+  for (const name of ['default', 'top', 'bottom', 'front', 'back']) {
+    const b = h('button', {
+      type: 'button', class: name === (view || 'default') ? 'is-on' : '',
+      title: `نمای ${VIEW_LABELS[name] || name}`, 'aria-label': `نمای ${VIEW_LABELS[name] || name}`,
+      onclick: () => {
+        big.orbit = { ...CUBE_VIEWS[name] };
+        big.home = { ...big.orbit };
+        [...bigViews.children].forEach(c => c.classList.remove('is-on'));
+        b.classList.add('is-on');
+        big.draw();
+      },
+    }, VIEW_SHORT[name] || name);
+    bigViews.append(b);
+  }
   const reset = h('button', {
     class: 'btn btn--ghost', type: 'button',
     onclick: () => { big.stop(); big.cube = new Cube().apply(alg || ''); big.draw(); },
   }, '↺ از نو');
-  const hint = h('span', { class: 'modal__hint' }, 'برای چرخاندن مکعب، با ماوس یا انگشت بکش.');
-  foot.append(play, reset, hint);
+  const hint = h('span', { class: 'modal__hint' },
+    'برای چرخاندن مکعب بکش؛ با چرخ ماوس نزدیک و دور شو. چرخش محدود نیست.');
+  foot.append(play, reset, bigSpeeds, bigViews, hint);
 
   const close = () => {
     big.stop();
@@ -422,20 +464,21 @@ function viewStep(pid, mid, sid) {
 
   const body = h('div', { class: 'stepbody' });
 
-  /* 1 — figures: each is a real state, with the step's own algorithm as a button */
+  /* 1 — figures: each is a real state of the same solve, and each one comes in
+     two sizes. The camera looks at the face this step works on. */
   if ((s.states || []).length) {
     const figs = h('div', { class: `figs figs--${Math.min((s.states || []).length, 3)}` });
     for (const st of s.states) {
-      figs.append(cubeFigure({
+      figs.append(figurePair({
         label: st.label || '', alg: st.alg, next: st.next, view: st.view,
-        maxWidth: (s.states || []).length === 1 ? 300 : 220,
       }));
     }
     body.append(h('div', { class: 'block' },
       h('div', { class: 'block__label' }, h('span', { class: 'n' }, '۱'), 'وضعیت مکعب در این گام'),
       figs,
       h('p', { class: 'block__note' },
-        'هر شکل یک وضعیت واقعی است؛ دکمه‌ی «اجرای گام» همان الگوریتم این صفحه را روی همان مکعب اجرا می‌کند.')));
+        'هر دو مکعب یک وضعیت‌اند، در دو اندازه. «اجرای گام» همان الگوریتم این صفحه را روی همان مکعب اجرا می‌کند؛ ' +
+        'در نمای بزرگ می‌توانی زاویه و سرعت را عوض کنی.')));
   }
 
   /* 2 — why */

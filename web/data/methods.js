@@ -34,9 +34,9 @@ const CONTENT = {
               why: 'لبه‌ی سفید یک قطعه با دو رنگ است. تا وقتی رنگ دوم با مرکز هم‌رنگش یکی نشود، ' +
                    'لبه در جای درست نیست — حتی اگر سفیدش رو به پایین باشد.',
               states: [
-                { label: 'شروع: مکعب به‌هم‌ریخته', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2', next: null, view: 'default' },
-                { label: 'دیزی: چهار سفید دور مرکز زرد', alg: 'R2 L2 F2 B2', next: 'R2 F2 B2 L2', view: 'top' },
-                { label: 'صلیب سفید: هر لبه بالای مرکز هم‌رنگش', alg: 'R2 L2 F2 B2 R2 F2 B2 L2', next: null, view: 'bottom' },
+                { label: 'شروع: مکعب به‌هم‌ریخته', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U', next: 'F2 B\' R\' L\'', view: 'default' },
+                { label: 'دیزی: چهار سفید دور مرکز زرد', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\'', next: 'R2 U B2 L2 U F2', view: 'top' },
+                { label: 'صلیب سفید: هر لبه بالای مرکز هم‌رنگش', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2', next: null, view: 'bottom' },
               ],
               steps: [
                 { t: 'لبه‌های سفید را بالا بیاور', d: 'سفیدها را دور مرکز زرد جمع کن، رو به بالا.' },
@@ -68,7 +68,8 @@ const CONTENT = {
               why: 'گوشه سه رنگ دارد، پس سه شرط باید همزمان برقرار شود. به همین دلیل «تکرار یک الگوریتم کوتاه» ' +
                    'از «الگوریتم مخصوص هر حالت» امن‌تر است: فقط باید بدانی گوشه بالای خانه‌ی درست است یا نه.',
               states: [
-                { label: 'قبل از این گام: سه گوشه جاشده، یکی مانده', alg: 'M2 U\' M U2 M\' U\' M2 R2 B2 R F R\' B2 R F\' R2 U2 R\' U\' R U\' R\' F U R U\' R\' F2 U\' F U R U R\' U\' R U\' R\'', next: 'R U R\'', view: 'bottom' },
+                { label: 'قبل از این گام: صلیب آماده است', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2', next: ' U F\' U\' F R\' U2 R B\' U B L\' U L', view: 'bottom' },
+                { label: 'بعد از این گام: لایه اول کامل', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L', next: null, view: 'bottom' },
               ],
               steps: [
                 { t: 'گوشه را بالای خانه‌اش بگیر', d: 'رنگ‌های کنارش را با دو مرکز کنار هم تطبیق بده.' },
@@ -98,7 +99,8 @@ const CONTENT = {
               why: 'این گام اولین جایی است که یک الگوریتم واقعی حفظ می‌کنی. الگوریتم دو بخش دارد: ' +
                    'لبه را از بالا جدا می‌کند، و بعد در شکاف کنار می‌نشاند.',
               states: [
-                { label: 'قبل از این گام: یک لبه‌ی میانی مانده', alg: 'M2 U\' M U2 M\' U\' M2 R2 B2 R F R\' B2 R F\' R2 U2 R\' U\' R U\' R\' F U R U\' R\' F2 U\' F U R U R\' U\'', next: 'U R U\' R\' U\' F\' U F', view: 'default' },
+                { label: 'قبل از این گام: لایه اول کامل است', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L', next: 'U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L', view: 'bottom' },
+                { label: 'بعد از این گام: دو لایه پایین کامل', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L', next: null, view: 'bottom' },
               ],
               steps: [
                 { t: 'لبه‌ی درست را در بالا پیدا کن', d: 'دو رنگش باید با دو مرکز همسایه یکی باشد.' },
@@ -128,7 +130,8 @@ const CONTENT = {
               why: 'در این گام مهم نیست لبه‌ها کجا هستند، فقط جهتشان مهم است. برای همین یک الگوریتم ' +
                    'کوچک کافی است: از «نقطه» به «ال»، از «ال» به «خط»، از «خط» به صلیب.',
               states: [
-                { label: 'خط زرد — نه صلیب', alg: 'M2 U\' M U2 M\' U\' M2 R2 B2 R F R\' B2 R F\' R2 U2 R\' U\' R U\' R\' F U R U\' R\' F\'', next: 'F R U R\' U\' F\'', view: 'top' },
+                { label: 'قبل از این گام: روی زرد بی‌شکل', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L', next: 'F R U R\' U\' R U R\' U\' F\'', view: 'top' },
+                { label: 'بعد از این گام: صلیب زرد', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L F R U R\' U\' R U R\' U\' F\'', next: null, view: 'top' },
               ],
               steps: [
                 { t: 'شکل را تشخیص بده', d: 'نقطه، ال، یا خط.' },
@@ -158,7 +161,8 @@ const CONTENT = {
               why: 'الگوریتم سون سه گوشه را می‌چرخاند و یکی را دست نمی‌زند. با تکرار آن و چرخاندن وجه پایین، ' +
                    'همه‌ی گوشه‌ها بالا می‌آیند بدون اینکه چیزی خراب شود.',
               states: [
-                { label: 'صلیب زرد آماده، گوشه‌ها برگشته', alg: 'M2 U\' M U2 M\' U\' M2 R2 B2 R F R\' B2 R F\' R2 U2 R\' U\' R U\' R\'', next: 'R U R\' U R U2 R\'', view: 'top' },
+                { label: 'قبل از این گام: صلیب زرد، گوشه‌ها برگشته', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L F R U R\' U\' R U R\' U\' F\'', next: 'U\' R U R\' U R U2 R\' U2 R U2 R\' U\' R U\' R\'', view: 'top' },
+                { label: 'بعد از این گام: تمام وجه زرد یک‌رنگ', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L F R U R\' U\' R U R\' U\' F\' U\' R U R\' U R U2 R\' U2 R U2 R\' U\' R U\' R\'', next: null, view: 'top' },
               ],
               steps: [
                 { t: 'سون یا آنتی‌سون را تشخیص بده', d: 'دو گوشه بالا، دو گوشه پایین.' },
@@ -185,7 +189,8 @@ const CONTENT = {
               why: 'نیکلاس سه گوشه را در یک چرخه جابه‌جا می‌کند و گوشه‌ی چهارم را نگه می‌دارد. ' +
                    'چون گوشه‌ی چهارم ثابت است، همیشه می‌شود با حداکثر دو اجرا کار را تمام کرد.',
               states: [
-                { label: 'وجه زرد کامل، گوشه‌ها جابه‌جا', alg: 'M2 U\' M U2 M\' U\' M2 R2 B2 R F R\' B2 R F\' R', next: 'R\' F R\' B2 R F\' R\' B2 R2', view: 'top' },
+                { label: 'قبل از این گام: وجه زرد کامل، گوشه‌ها جابه‌جا', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L F R U R\' U\' R U R\' U\' F\' U\' R U R\' U R U2 R\' U2 R U2 R\' U\' R U\' R\'', next: 'R\' F R\' B2 R F\' R\' B2 R2 U R2 B2 R F R\' B2 R F\' R', view: 'top' },
+                { label: 'بعد از این گام: گوشه‌ها سر جای خودشان', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L F R U R\' U\' R U R\' U\' F\' U\' R U R\' U R U2 R\' U2 R U2 R\' U\' R U\' R2 F R\' B2 R F\' R\' B2 R2 U R2 B2 R F R\' B2 R F\' R', next: null, view: 'top' },
               ],
               steps: [
                 { t: 'یک گوشه‌ی درست پیدا کن', d: 'اگر هیچ‌کدام درست نیست، یک بار الگوریتم را بزن.' },
@@ -194,6 +199,7 @@ const CONTENT = {
               algorithms: [
                 { alg: 'U R U\' L\' U R\' U\' L', label: 'نیکلاس' },
                 { alg: 'R\' F R\' B2 R F\' R\' B2 R2', label: 'A-Perm' },
+                { alg: 'R2 B2 R F R\' B2 R F\' R', label: 'A-Perm در جهت برگشت' },
               ],
               mistakes: ['اگر هیچ گوشه‌ای سرجایش نیست، یک گوشه را بالای جای درستش بگیر، الگوریتم را یک بار بزن، بعد دوباره نگاه کن.'],
               alternatives: [
@@ -210,7 +216,8 @@ const CONTENT = {
               why: 'یک الگوریتم، سه لبه را در یک دایره جابه‌جا می‌کند. اگر چهار لبه جابه‌جا باشند، ' +
                    'دو بار اجرا لازم است — و همین تنها چیزی است که باید یاد بگیری.',
               states: [
-                { label: 'فقط جای سه لبه مانده', alg: 'M2 U\' M U2 M\' U\' M2', next: 'M2 U M U2 M\' U M2', view: 'top' },
+                { label: 'قبل از این گام: فقط جای سه لبه مانده', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L F R U R\' U\' R U R\' U\' F\' U\' R U R\' U R U2 R\' U2 R U2 R\' U\' R U\' R2 F R\' B2 R F\' R\' B2 R2 U R2 B2 R F R\' B2 R F\' R', next: 'M2 U\' M U2 M\' U\' M2', view: 'top' },
+                { label: 'بعد از این گام: مکعب حل شد', alg: 'R U F\' L2 D B\' R2 U\' F2 D2 L B2 U2 R\' F D\' L2 B U2 L2 F U F2 B\' R\' L\' R2 U B2 L2 U F2 U F\' U\' F R\' U2 R B\' U B L\' U L U F U\' F\' U\' L\' U L U2 R U\' R\' U\' F\' U F U\' R\' U R U B U\' B\' U\' L U\' L\' U\' B\' U B F U\' F\' U\' L\' U L F R U R\' U\' R U R\' U\' F\' U\' R U R\' U R U2 R\' U2 R U2 R\' U\' R U\' R\' R\' F R\' B2 R F\' R\' B2 R2 U R2 B2 R F R\' B2 R F\' R M2 U\' M U2 M\' U\' M2', next: null, view: 'top' },
               ],
               steps: [
                 { t: 'لبه‌ها را نگاه کن', d: 'سه‌تایی جابه‌جا یا دوتایی.' },
@@ -218,6 +225,7 @@ const CONTENT = {
               ],
               algorithms: [
                 { alg: 'M2 U M U2 M\' U M2', label: 'U-Perm (ام‌محور)' },
+                { alg: 'M2 U\' M U2 M\' U\' M2', label: 'U-Perm، جهت دیگر' },
                 { alg: 'R U\' R U R U R U\' R\' U\' R2', label: 'U-Perm استاندارد' },
               ],
               mistakes: ['اگر مکعب حل شد ولی یک لبه برعکس است، مکعب فیزیکی‌ات خراب شده، نه الگوریتم.'],

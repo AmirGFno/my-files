@@ -182,11 +182,15 @@ class Cube {
    front 17/17/66.) A perfectly square-on view is avoided on purpose: it hides
    nine stickers behind their neighbours and the silhouette goes flat. */
 const VIEWS = {
-  default: { yaw: 45, pitch: 30 },   // U, F, R as equal thirds
-  top: { yaw: 45, pitch: 56 },       // U dominant, F and R equal
-  bottom: { yaw: 45, pitch: -52 },   // D dominant, looking from below
-  back: { yaw: 225, pitch: 30 },     // U, B, L
-  front: { yaw: 15, pitch: 14 },     // F dominant, and all 27 stickers stay visible
+  default: { yaw: 45, pitch: 30 },              // U, F, R as equal thirds
+  top: { yaw: 45, pitch: 56 },                  // U dominant, F and R equal
+  bottom: { yaw: 45, pitch: -52 },              // D dominant, looking from below
+  /* the white layer is held UP while it is built: the camera looks at the white
+     face and the roll puts it at the top of the picture, with the rest of the
+     cube hanging below it */
+  whiteUp: { yaw: 45, pitch: -52, roll: 180 },
+  back: { yaw: 225, pitch: 30 },                // U, B, L
+  front: { yaw: 15, pitch: 14 },                // F dominant, all 27 stickers visible
 };
 
 const STICKER = 0.472;  // half-size: 0.944 of a cubie, so a ~5% gap like a real cube
@@ -199,7 +203,12 @@ const LIFT = 0.006;     // stickers sit just above the body so faces never coinc
 const LIGHT = { U: 1.0, F: 0.94, R: 0.84, D: 0.97, B: 0.88, L: 0.78 };
 const DARK = { U: 0.92, F: 0.84, R: 0.72, D: 0.90, B: 0.78, L: 0.66 };
 
-function cameraBasis(yawDeg, pitchDeg) {
+/* Free orbit. The camera direction is a point on the sphere described by two
+   angles, and the two angles are NOT clamped: dragging up keeps going, past the
+   pole and out the other side, the way a phone photo viewer turns a picture. The
+   only thing that is stable at the poles is the "up" of the picture, which is
+   derived from whichever axis is least aligned with the view direction. */
+function cameraBasis(yawDeg, pitchDeg, rollDeg = 0) {
   const yaw = (yawDeg * Math.PI) / 180;
   const pitch = (pitchDeg * Math.PI) / 180;
   const dir = [
@@ -208,8 +217,18 @@ function cameraBasis(yawDeg, pitchDeg) {
     Math.cos(yaw) * Math.cos(pitch),
   ];
   const depth = vnorm(dir);
-  const right = vnorm(vcross([0, 1, 0], depth));
-  const up = vnorm(vcross(depth, right));
+  /* pick a world axis for "up" that is not parallel to the view direction */
+  const worldUp = Math.abs(depth[1]) > 0.999 ? [0, 0, depth[2] >= 0 ? -1 : 1] : [0, 1, 0];
+  let right = vnorm(vcross(worldUp, depth));
+  let up = vnorm(vcross(depth, right));
+  /* roll turns the picture inside the screen. It is what makes the white face
+     read as "held up" when the camera is looking at it from underneath. */
+  if (rollDeg) {
+    const r = (rollDeg * Math.PI) / 180, c = Math.cos(r), s2 = Math.sin(r);
+    const [rx, ry] = [right, up];
+    right = [rx[0] * c + ry[0] * s2, rx[1] * c + ry[1] * s2, rx[2] * c + ry[2] * s2];
+    up = [-rx[0] * s2 + ry[0] * c, -rx[1] * s2 + ry[1] * c, -rx[2] * s2 + ry[2] * c];
+  }
   return { right, up, depth };
 }
 
@@ -226,6 +245,7 @@ class CubeView {
     this.interactive = opts.interactive !== false;
     this.showShadow = opts.shadow !== false;
     this.speed = opts.speed || 1;                 // 1 = normal
+    this.zoom = 1;                                // wheel zoom, free between 0.55 and 1.8
     this.baseDuration = opts.duration || 260;     // ms per quarter turn at speed 1
     // respect the system setting: people who ask for less motion get instant turns
     this.reducedMotion = typeof matchMedia === 'function'
@@ -269,8 +289,13 @@ class CubeView {
     };
     const move = (e) => {
       if (!this.drag) return;
+      /* no clamp in either direction: the cube is a ball in the reader's hand */
       this.orbit.yaw = this.drag.yaw - (e.clientX - this.drag.x) * 0.5;
-      this.orbit.pitch = Math.max(-85, Math.min(85, this.drag.pitch + (e.clientY - this.drag.y) * 0.4));
+      this.orbit.pitch = this.drag.pitch + (e.clientY - this.drag.y) * 0.4;
+      /* keep the numbers small so a long drag never turns into float noise */
+      this.orbit.yaw = ((this.orbit.yaw % 360) + 360) % 360;
+      this.orbit.pitch = ((this.orbit.pitch % 360) + 360) % 360;
+      if (this.orbit.pitch > 180) this.orbit.pitch -= 360;
       this.draw();
     };
     const up = () => { this.drag = null; c.style.cursor = 'grab'; };
@@ -279,6 +304,13 @@ class CubeView {
     c.addEventListener('pointerup', up);
     c.addEventListener('pointercancel', up);
     c.addEventListener('pointerleave', up);
+    /* wheel zooms the picture; it does not change the camera, only the scale */
+    c.addEventListener('wheel', (e) => {
+      if (!this.interactive) return;
+      e.preventDefault();
+      this.zoom = Math.max(0.55, Math.min(1.8, this.zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08)));
+      this.draw();
+    }, { passive: false });
   }
 
   /* ------------------------------------------------------------- playback */
@@ -359,7 +391,7 @@ class CubeView {
     if (!W || !H) return;
     ctx.clearRect(0, 0, W, H);
 
-    const { right, up, depth } = cameraBasis(this.orbit.yaw, this.orbit.pitch);
+    const { right, up, depth } = cameraBasis(this.orbit.yaw, this.orbit.pitch, this.orbit.roll || 0);
     const proj = (p) => [vdot(p, right), vdot(p, up)];
 
     const corners = [];
@@ -367,7 +399,7 @@ class CubeView {
     const flat = corners.map(proj);
     const xs = flat.map(p => p[0]), ys = flat.map(p => p[1]);
     const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
-    const scale = (Math.min(W, H) * 0.86) / span;
+    const scale = (Math.min(W, H) * 0.86 * this.zoom) / span;
     const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
     const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
     const toScreen = (p) => [W / 2 + (vdot(p, right) - cx) * scale, H / 2 - (vdot(p, up) - cy) * scale];

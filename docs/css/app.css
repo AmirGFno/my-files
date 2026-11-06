@@ -415,3 +415,13 @@ html[data-theme="dark"] .alg-table td code { color: #cbd8ea; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* a step figure, in both sizes: the small one for the shape of the case, the
+   large one for watching a layer turn */
+.figpair { display: grid; grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr); gap: 10px; align-items: start; }
+.figpair > .fig { height: 100%; }
+.fig--big canvas { max-width: 420px; }
+@media (max-width: 720px) {
+  .figpair { grid-template-columns: minmax(0, 1fr); }
+  .fig--big canvas { max-width: 320px; }
+}
