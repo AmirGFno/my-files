@@ -22,6 +22,8 @@ function makeCanvas(w,h,colourAware){
 }
 const hex=(c)=>'#'+c.map(q=>Math.round(Math.max(0,Math.min(1,q))*255).toString(16).padStart(2,'0')).join('');
 const near=(h,rgb)=>{const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return Math.abs(r-rgb[0])<26&&Math.abs(g-rgb[1])<26&&Math.abs(b-rgb[2])<26;};
+/* only coloured/white sticker facets count; the plastic body is dark grey */
+const isSticker=(h)=>{if(!h||h.length!==7)return false;const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return (Math.max(r,g,b)-Math.min(r,g,b))>24 || Math.min(r,g,b)>150;};
 const faceOf=(hexColor)=>Object.entries(COLORS).find(([f,c])=>near(hexColor,c.map(q=>q*255)))?.[0];
 
 function inside(pt,poly){
@@ -44,6 +46,7 @@ function analyse(viewName,W=420){
     for(let i=0,j=p.length-1;i<p.length;j=i++) a+=(p[j][0]+p[i][0])*(p[j][1]-p[i][1]);
     a=Math.abs(a/2); total+=a;
     const col=(s.grad && s.grad.c) || '#000000';
+    if(!isSticker(col)) continue;
     const key=faceOf(col) || 'x';
     area[key]=(area[key]||0)+a;
   }
@@ -57,10 +60,13 @@ function analyse(viewName,W=420){
     for(const s of stickers) if(inside(pt,s.pts)) hits++;
     if(hits>maxHits) maxHits=hits;
   }
-  return {count:stickers.length, pct, maxHits, total:Math.round(total)};
+  const labels = stickers.map(s => faceOf((s.grad&&s.grad.c)||'')||'?');
+  return {count:stickers.length, pct, maxHits, total:Math.round(total), labels};
 }
 
 for(const name of Object.keys(VIEWS)){
   const r=analyse(name);
-  console.log(name.padEnd(8), 'stickers', r.count, '| area%', JSON.stringify(r.pct), '| maxOverlap', r.maxHits);
+  const tally = {};
+  r.labels.forEach(l => tally[l] = (tally[l] || 0) + 1);
+  console.log(name.padEnd(8), 'areas', JSON.stringify(r.pct), '| per face', JSON.stringify(tally), '| maxOverlap', r.maxHits);
 }

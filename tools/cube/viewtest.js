@@ -16,14 +16,16 @@ const check = (name, cond, extra = '') => {
 
 /* fake 2d context that records polygons */
 function ctx2d() {
-  const rec = { polys: [], fills: 0, clears: 0 };
-  const grad = { addColorStop() {} };
+  const rec = { polys: [], grads: [], fills: 0, clears: 0, colours: [] };
+  let lastStop = '';
+  const grad = { addColorStop(t, c) { if (t === 0) lastStop = c; } };
   const api = {
     setTransform() {}, clearRect() { rec.clears++; }, beginPath() { rec.cur = []; },
     moveTo(x, y) { rec.cur.push([x, y]); }, lineTo(x, y) { rec.cur.push([x, y]); },
     quadraticCurveTo(x1, y1, x, y) { rec.cur.push([x, y]); },
-    closePath() { if (rec.cur && rec.cur.length) rec.polys.push(rec.cur); },
-    createLinearGradient() { return grad; }, fill() { rec.fills++; }, stroke() {},
+    closePath() { if (rec.cur && rec.cur.length) { rec.polys.push(rec.cur.slice()); rec.grads.push(lastStop); } },
+    createLinearGradient() { lastStop = ''; return grad; },
+    fill() { rec.fills++; }, stroke() {},
     ellipse() {}, fillRect() {},
     set fillStyle(v) {}, get fillStyle() { return ''; },
     set strokeStyle(v) {}, set lineWidth(v) {},
@@ -48,6 +50,14 @@ const raf = (fn) => { queue.push(fn); return queue.length; };
 const cancel = () => {};
 const tick = (ms) => { const q = queue; queue = []; q.forEach(fn => fn(ms)); };
 
+const isSticker = (c) => {
+  if (!c || c.length !== 7) return false;
+  const r = parseInt(c.slice(1, 3), 16), g = parseInt(c.slice(3, 5), 16), b = parseInt(c.slice(5, 7), 16);
+  const hue = Math.max(r, g, b) - Math.min(r, g, b);
+  // coloured stickers are either saturated or bright (white); plastic is dark grey
+  return hue > 24 || Math.min(r, g, b) > 150;
+};
+
 const win2 = {};
 new Function('window', 'module', 'exports', 'requestAnimationFrame', 'cancelAnimationFrame', 'devicePixelRatio',
   src + '\nwindow.__x = { Cube, CubeView };')(win2, {}, {}, raf, cancel, 1);
@@ -61,8 +71,22 @@ view.resize();
 const polysAt = () => canvas.rec.polys.length;
 canvas.rec.polys.length = 0;
 view.draw();
-const stickerCount = canvas.rec.polys.length - 1;  // 1 silhouette + 3 faces × 9
+/* roundPoly emits one path per facet, but the fake context sees its two
+   closePath calls, so count distinct sticker paths instead of closePath calls */
+const countStickers = (rec) => {
+  const seen = new Set();
+  let n = 0;
+  rec.polys.forEach((p, i) => {
+    if (!isSticker(rec.grads[i])) return;
+    const key = p.map(([x, y]) => x.toFixed(1) + ',' + y.toFixed(1)).sort().join(';');
+    if (seen.has(key)) return;
+    seen.add(key); n++;
+  });
+  return n;
+};
+const stickerCount = countStickers(canvas.rec);
 check('a drawn cube shows 3 faces of 9 stickers (27)', stickerCount === 27, `got ${stickerCount}`);
+check('every cubie face also gets a dark plastic body', canvas.rec.polys.length >= 54, `polys=${canvas.rec.polys.length}`);
 
 /* every sticker must be a quadrilateral-ish polygon, no NaNs, inside the canvas */
 const flat = canvas.rec.polys.flat();
@@ -94,7 +118,12 @@ tick(30);
 check('mid-move: cube model untouched until the turn completes', anim.cube.solved());
 
 /* capture the moving stickers' positions between frames */
-const snapshot = () => { const out = c2.rec.polys.slice(1).map(p => p.map(([x, y]) => [x.toFixed(2), y.toFixed(2)].join(',')).join(';')); c2.rec.polys.length = 0; return out; };
+const snapshot = () => {
+  const out = c2.rec.polys.map((p, i) => ({ c: c2.rec.grads[i], s: p.map(([x, y]) => [x.toFixed(2), y.toFixed(2)].join(',')).join(';') }))
+    .filter(o => isSticker(o.c)).map(o => o.s);
+  c2.rec.polys.length = 0; c2.rec.grads.length = 0;
+  return out;
+};
 c2.rec.polys.length = 0;
 tick(30);
 const s1 = snapshot();
@@ -120,8 +149,9 @@ for (const name of ['default', 'top', 'bottom', 'front']) {
   cv.rec.polys.length = 0;
   v.draw();
   const pts = cv.rec.polys.flat();
+  const stickers = countStickers(cv.rec);
   camSpots[name] = {
-    polys: cv.rec.polys.length - 1,
+    polys: stickers,
     cx: pts.reduce((a, p) => a + p[0], 0) / pts.length,
     cy: pts.reduce((a, p) => a + p[1], 0) / pts.length,
   };

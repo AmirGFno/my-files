@@ -378,72 +378,77 @@ class CubeView {
     }
     const idxOf = { x: 0, y: 1, z: 2 };
 
-    /* gather visible stickers (quads in 3D, then projected) */
-    const stickers = [];
-    for (const face of FACES) {
-      const axisName = Math.abs(NORMALS[face][0]) ? 'x' : Math.abs(NORMALS[face][1]) ? 'y' : 'z';
-      const axis = idxOf[axisName];
-      const sign = NORMALS[face][axis];
-      const uAxis = axis === 0 ? 1 : axis === 1 ? 0 : 0;
-      const vAxis = axis === 0 ? 2 : axis === 1 ? 2 : 1;
+    /* Build the scene out of solid cubies instead of a flat backdrop with
+       stickers on it. Why: while a layer turns, part of it is behind the body,
+       and stickers painted over a flat backdrop would show through where they
+       should be hidden. Sorting real cubie faces by depth fixes that. */
+    const facets = [];
+    const BODY = 0.5;        // plastic, as a fraction of a cubie
+    const STK = 0.472;       // sticker inset that leaves a visible seam
 
-      for (const [key, faces] of this.cube.st) {
+    for (const [key, faces] of this.cube.st) {
+      const pos = key.split(',').map(Number);
+      const moving = !!(spin && spin.layers.has(pos[idxOf[spin.axis]]));
+      const place = (v) => (moving ? spin.rot(v) : v);
+
+      for (const face of FACES) {
         const colour = faces[face];
-        if (!colour) continue;
-        const pos = key.split(',').map(Number);
-        if (pos[axis] !== sign) continue;
+        if (!colour) continue;                       // only cubies on this surface
+        const normal0 = NORMALS[face];
+        const normal = place(normal0);
+        if (vdot(normal, depth) <= 0.02) continue;   // back-face culling
+        const axis = Math.abs(normal0[0]) ? 0 : Math.abs(normal0[1]) ? 1 : 2;
+        const sign = normal0[axis];
+        const uAxis = axis === 0 ? 1 : axis === 1 ? 0 : 0;
+        const vAxis = axis === 0 ? 2 : axis === 1 ? 2 : 1;
 
-        const plane = pos[axis] + sign * 0.5;
-        // pull every sticker a hair towards the camera-facing surface… no:
-        // push it out by LIFT so neighbouring faces never coincide on screen
-        // (that coincidence is what created the thin dark seam between faces)
-        let quad = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([su, sv]) => {
+        const build = (half, lift) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([su, sv]) => {
           const p = pos.slice();
-          p[axis] = plane + sign * LIFT;
-          p[uAxis] += su * STICKER;
-          p[vAxis] += sv * STICKER;
-          return p;
+          p[axis] = pos[axis] + sign * (0.5 + lift);
+          p[uAxis] += su * half;
+          p[vAxis] += sv * half;
+          return place(p);
         });
-        let normal = NORMALS[face];
 
-        const moving = spin && spin.layers.has(pos[idxOf[spin.axis]]);
-        if (moving) {
-          quad = quad.map(spin.rot);
-          normal = spin.rot(normal);
-        }
+        // the dark plastic face, slightly bigger than the sticker on it
+        const bodyQuad = build(BODY, 0);
+        const bodyPts = bodyQuad.map(toScreen);
+        facets.push({
+          pts: bodyPts, kind: 'body',
+          depth: vdot(centroid(bodyQuad), depth),
+          top: [0.115, 0.125, 0.145], bottom: [0.055, 0.06, 0.072],
+        });
 
-        if (vdot(normal, depth) <= 0.02) continue;        // back-face culling
-        const pts = quad.map(toScreen);
-        // a sticker seen almost edge-on projects to a hairline; drawn, it shows
-        // up as a stray coloured streak across the cube, so leave it out
+        // the sticker itself
+        const stickerQuad = build(STK, LIFT);
+        const stickerPts = stickerQuad.map(toScreen);
         const edge = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
         let area2 = 0, perim = 0;
-        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-          area2 += (pts[j][0] + pts[i][0]) * (pts[j][1] - pts[i][1]);
-          perim += edge(pts[j], pts[i]);
+        for (let i = 0, j = stickerPts.length - 1; i < stickerPts.length; j = i++) {
+          area2 += (stickerPts[j][0] + stickerPts[i][0]) * (stickerPts[j][1] - stickerPts[i][1]);
+          perim += edge(stickerPts[j], stickerPts[i]);
         }
-        // "width" of the shape: for a sliver 2·area/perimeter is its thin side
-        const width = perim ? Math.abs(area2) / perim : 0;
-        if (width < Math.min(W, H) * 0.011) continue;
+        const thin = perim ? Math.abs(area2) / perim : 0;
+        // a sticker seen edge-on is a hairline; it only looks like a stray streak
+        if (thin < Math.min(W, H) * (moving ? 0.022 : 0.011)) continue;
 
         const lit = 0.55 + 0.45 * Math.max(0, vdot(vnorm(normal), vnorm([-0.35, 0.72, 0.75])));
         const base = COLORS[colour] || [0.8, 0.8, 0.8];
-        const top = mixc(base, [1, 1, 1], 0.10 * lit).map(q => Math.min(1, q * (0.82 + 0.28 * lit)));
-        const bottom = base.map(q => q * (0.62 + 0.24 * lit));
-        const mid = [0, 0, 0];
-        for (const p of quad) { mid[0] += p[0] / 4; mid[1] += p[1] / 4; mid[2] += p[2] / 4; }
-        stickers.push({ pts, quad, top, bottom, depth: vdot(mid, depth) });
+        facets.push({
+          pts: stickerPts, kind: 'sticker',
+          depth: vdot(centroid(stickerQuad), depth) + 0.002,
+          top: mixc(base, [1, 1, 1], 0.10 * lit).map(q => Math.min(1, q * (0.82 + 0.28 * lit))),
+          bottom: base.map(q => q * (0.62 + 0.24 * lit)),
+        });
       }
     }
 
-    /* silhouette: the hull of everything on screen, so a turning layer never
-       pokes out of a hole in the body */
+    /* silhouette: the body outline, so no gap shows between faces */
     const allPts = [];
     for (const p of corners) allPts.push(toScreen(p));
-    for (const s of stickers) for (const p of s.pts) allPts.push(p);
     const hullPts = hull(allPts);
 
-    // contact shadow, drawn under the body
+    // contact shadow, under everything
     if (this.showShadow) {
       const hxs = hullPts.map(p => p[0]), hys = hullPts.map(p => p[1]);
       const sx = (Math.max(hxs) + Math.min(hxs)) / 2;
@@ -457,25 +462,32 @@ class CubeView {
         ctx.fill();
       }
     }
-    ctx.beginPath();
-    hullPts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
-    ctx.closePath();
-    ctx.fillStyle = '#171a21';
-    ctx.fill();
 
-    stickers.sort((a, b) => a.depth - b.depth);
-    for (const s of stickers) {
-      const xs2 = s.pts.map(p => p[0]), ys2 = s.pts.map(p => p[1]);
-      const g = ctx.createLinearGradient(Math.min(...xs2), Math.min(...ys2), Math.max(...xs2), Math.max(...ys2));
-      g.addColorStop(0, hexOf(s.top));
-      g.addColorStop(1, hexOf(s.bottom));
-      roundPoly(ctx, s.pts, Math.max(2, Math.min(W, H) * 0.008));
-      ctx.fillStyle = g;
-      ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(12,14,20,0.42)';
-      ctx.stroke();
-    }
+    /* paint far to near */
+    facets.sort((a, b) => a.depth - b.depth);
+    for (const f of facets) drawFacet(ctx, f, Math.min(W, H) * (f.kind === 'sticker' ? 0.008 : 0.004));
+
+  }
+}
+
+const centroid = (quad) => [
+  (quad[0][0] + quad[1][0] + quad[2][0] + quad[3][0]) / 4,
+  (quad[0][1] + quad[1][1] + quad[2][1] + quad[3][1]) / 4,
+  (quad[0][2] + quad[1][2] + quad[2][2] + quad[3][2]) / 4,
+];
+
+function drawFacet(ctx, f, radius) {
+  const xs = f.pts.map(p => p[0]), ys = f.pts.map(p => p[1]);
+  const g = ctx.createLinearGradient(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+  g.addColorStop(0, hexOf(f.top));
+  g.addColorStop(1, hexOf(f.bottom));
+  roundPoly(ctx, f.pts, radius);
+  ctx.fillStyle = g;
+  ctx.fill();
+  if (f.kind === 'sticker') {
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(12,14,20,0.38)';
+    ctx.stroke();
   }
 }
 
