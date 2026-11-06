@@ -195,7 +195,7 @@ const CONTENT = {
                 { alg: 'U R U\' L\' U R\' U\' L', label: 'نیکلاس' },
                 { alg: 'R\' F R\' B2 R F\' R\' B2 R2', label: 'A-Perm' },
               ],
-              mistakes: ['اگر گوشه‌ها سرجا هستند ولی رنگشان جابه‌جاست، باید کل مکعب را بچرخانی و الگوریتم را دوباره بزنی.'],
+              mistakes: ['اگر هیچ گوشه‌ای سرجایش نیست، یک گوشه را بالای جای درستش بگیر، الگوریتم را یک بار بزن، بعد دوباره نگاه کن.'],
               alternatives: [
                 { name: 'نیکلاس', why: 'کوتاه و برای مبتدی کافی', moves: '۸',
                   difficulty: 2, ref: 'yellow-corners-permute', recommended: true },
