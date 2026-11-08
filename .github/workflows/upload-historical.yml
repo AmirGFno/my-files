@@ -9,21 +9,81 @@ permissions:
 jobs:
   upload:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Download images to book/images/historical
+        shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail   # بدون -e : خطای تک‌فایل job را نمی‌کشد
           DEST="book/images/historical"
           mkdir -p "$DEST"
+          failed=""
+
+          # تلاش برای حل URL معتبر از روی نام فایل در Wikimedia Commons
+          resolve_wikimedia_url() {
+            local fname="$1"
+            local stem="${fname%.*}"
+            # نام فایل روی Commons معمولاً همان نام ذخیره‌سازی ماست
+            for title in "File:${fname}" \
+                         "File:${stem}.jpg" "File:${stem}.JPG" \
+                         "File:${stem}.jpeg" "File:${stem}.png" \
+                         "File:${stem}.svg" "File:${stem}.tif" "File:${stem}.tiff"; do
+              local u
+              u=$(curl -fsSL -G "https://commons.wikimedia.org/w/api.php" \
+                    --data-urlencode "action=query" \
+                    --data-urlencode "titles=$title" \
+                    --data-urlencode "prop=imageinfo" \
+                    --data-urlencode "iiprop=url" \
+                    --data-urlencode "format=json" \
+                    --data-urlencode "formatversion=2" \
+                  | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    p = d['query']['pages'][0]
+    if p.get('missing'):
+        sys.exit(0)
+    print(p['imageinfo'][0]['url'])
+except Exception:
+    pass
+" 2>/dev/null || true)
+              if [ -n "$u" ]; then echo "$u"; return 0; fi
+            done
+            return 1
+          }
+
           while IFS='|' read -r fname url; do
             [ -z "$fname" ] && continue
             echo "::group::$fname"
-            curl -fL --retry 3 --retry-delay 5 -o "$DEST/$fname" "$url"
-            ls -lh "$DEST/$fname"
+
+            ok=0
+            # ۱) تلاش مستقیم
+            if curl -fL --retry 3 --retry-delay 5 -o "$DEST/$fname" "$url"; then
+              ok=1
+            else
+              # ۲) اگر از upload.wikimedia.org بود، از API حل کن
+              if [[ "$url" == *"upload.wikimedia.org"* ]]; then
+                echo "Direct URL failed; resolving via Wikimedia API…"
+                resolved=$(resolve_wikimedia_url "$fname" || true)
+                if [ -n "$resolved" ]; then
+                  echo "Resolved: $resolved"
+                  if curl -fL --retry 3 --retry-delay 5 -o "$DEST/$fname" "$resolved"; then
+                    ok=1
+                  fi
+                fi
+              fi
+            fi
+
+            if [ "$ok" = "1" ]; then
+              ls -lh "$DEST/$fname"
+            else
+              echo "::warning::Failed to download $fname from $url"
+              rm -f "$DEST/$fname"
+              failed="$failed $fname"
+            fi
             echo "::endgroup::"
           done <<'EOF'
           H01_CH01_antikythera-mechanism.jpg|https://upload.wikimedia.org/wikipedia/commons/6/63/Antikythera_Mechanism_%28NAMA%29_2017.jpg
@@ -56,13 +116,18 @@ jobs:
           H53_CH05_narmer-palette.jpg|https://upload.wikimedia.org/wikipedia/commons/b/be/Narmer_Palette.jpg
           EOF
 
+          if [ -n "${failed:-}" ]; then
+            echo "::warning::Some files failed to download:$failed"
+          fi
+
       - name: Commit and push
+        shell: bash
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add book/images/historical
           if git diff --cached --quiet; then
-            echo "No changes to commit (files may already exist)"
+            echo "No changes to commit"
             exit 0
           fi
           git commit -m "Add historical images (H01…H75) to book/images/historical"
