@@ -17,20 +17,15 @@ jobs:
       - name: Download images to book/images/historical
         shell: bash
         run: |
-          set -uo pipefail   # بدون -e : خطای تک‌فایل job را نمی‌کشد
+          set -uo pipefail
           DEST="book/images/historical"
           mkdir -p "$DEST"
           failed=""
 
-          # تلاش برای حل URL معتبر از روی نام فایل در Wikimedia Commons
           resolve_wikimedia_url() {
             local fname="$1"
             local stem="${fname%.*}"
-            # نام فایل روی Commons معمولاً همان نام ذخیره‌سازی ماست
-            for title in "File:${fname}" \
-                         "File:${stem}.jpg" "File:${stem}.JPG" \
-                         "File:${stem}.jpeg" "File:${stem}.png" \
-                         "File:${stem}.svg" "File:${stem}.tif" "File:${stem}.tiff"; do
+            for title in "File:${fname}" "File:${stem}.jpg" "File:${stem}.JPG" "File:${stem}.jpeg" "File:${stem}.png" "File:${stem}.svg" "File:${stem}.tif" "File:${stem}.tiff"; do
               local u
               u=$(curl -fsSL -G "https://commons.wikimedia.org/w/api.php" \
                     --data-urlencode "action=query" \
@@ -39,17 +34,7 @@ jobs:
                     --data-urlencode "iiprop=url" \
                     --data-urlencode "format=json" \
                     --data-urlencode "formatversion=2" \
-                  | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    p = d['query']['pages'][0]
-    if p.get('missing'):
-        sys.exit(0)
-    print(p['imageinfo'][0]['url'])
-except Exception:
-    pass
-" 2>/dev/null || true)
+                  | jq -r '.query.pages[0].imageinfo[0].url // empty' 2>/dev/null || true)
               if [ -n "$u" ]; then echo "$u"; return 0; fi
             done
             return 1
@@ -58,13 +43,11 @@ except Exception:
           while IFS='|' read -r fname url; do
             [ -z "$fname" ] && continue
             echo "::group::$fname"
-
             ok=0
-            # ۱) تلاش مستقیم
+            
             if curl -fL --retry 3 --retry-delay 5 -o "$DEST/$fname" "$url"; then
               ok=1
             else
-              # ۲) اگر از upload.wikimedia.org بود، از API حل کن
               if [[ "$url" == *"upload.wikimedia.org"* ]]; then
                 echo "Direct URL failed; resolving via Wikimedia API…"
                 resolved=$(resolve_wikimedia_url "$fname" || true)
