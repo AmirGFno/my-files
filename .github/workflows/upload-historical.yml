@@ -1,0 +1,69 @@
+name: Upload historical images to book/images/historical
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download images to book/images/historical
+        run: |
+          set -euo pipefail
+          DEST="book/images/historical"
+          mkdir -p "$DEST"
+          while IFS='|' read -r fname url; do
+            [ -z "$fname" ] && continue
+            echo "::group::$fname"
+            curl -fL --retry 3 --retry-delay 5 -o "$DEST/$fname" "$url"
+            ls -lh "$DEST/$fname"
+            echo "::endgroup::"
+          done <<'EOF'
+          H01_CH01_antikythera-mechanism.jpg|https://upload.wikimedia.org/wikipedia/commons/6/63/Antikythera_Mechanism_%28NAMA%29_2017.jpg
+          H46_CH01_prague-orloj-dial.jpg|https://upload.wikimedia.org/wikipedia/commons/4/43/Praha_Astronomical_Clock_Dial_01.jpg
+          H50_CH03_cancer-al-sufi.jpg|https://upload.wikimedia.org/wikipedia/commons/1/15/Book_of_the_Fixed_Stars_Auv0265_Cancer.jpg
+          H05_CH04_dioscuri-castor-pollux.jpg|https://upload.wikimedia.org/wikipedia/commons/1/18/Castor_and_Pollux%2C_archaic_relief%2C_AM_of_Delphi%2C_201363.jpg
+          H07_CH05_gilgamesh-flood-tablet.jpg|https://upload.wikimedia.org/wikipedia/commons/5/5b/British_Museum_Flood_Tablet_1.jpg
+          H08_CH05_pyramid-of-djoser.jpg|https://upload.wikimedia.org/wikipedia/commons/3/3e/Pyramid_of_Djoser_2010.jpg
+          H09_CH05_red-pyramid-dahshur.jpg|https://upload.wikimedia.org/wikipedia/commons/e/e5/Dahshur_-_Red_Pyramid_from_road.JPG
+          H10_CH05_giza-pyramids-panorama.jpg|https://upload.wikimedia.org/wikipedia/commons/9/99/Giza_Pyramids_Panorama.jpg
+          H11_CH05_great-sphinx.jpg|https://upload.wikimedia.org/wikipedia/commons/c/ce/Great_Sphinx_%28%D8%A3%D8%A8%D9%88_%D8%A7%D9%84%D9%87%D9%88%D9%84%29.jpg
+          H16_CH05_apis-bull.jpg|https://upload.wikimedia.org/wikipedia/commons/a/a9/Statuette_of_the_Apis_bull%2C_bronze_-_Museo_Egizio_Turin_S_105_p01.jpg
+          H20_CH06_beit-alpha-akedah.jpg|https://upload.wikimedia.org/wikipedia/commons/9/96/Beit_alfa01.jpg
+          H26_CH07_agnus-dei-san-vitale.jpg|https://upload.wikimedia.org/wikipedia/commons/a/a5/Basilica_of_San_Vitale_-_Lamb_of_God_mosaic.jpg
+          H29_CH07_four-yugas.svg|https://upload.wikimedia.org/wikipedia/commons/5/59/Four_Yugas_of_Hindu_Eschatology.svg
+          H30_CH07_krishna-arjuna-chariot.jpg|https://upload.wikimedia.org/wikipedia/commons/3/37/Krishna_and_Arjun_on_the_chariot%2C_Mahabharata%2C_18th-19th_century%2C_India.jpg
+          H32_CH07_maitrey-gandhara.jpg|https://upload.wikimedia.org/wikipedia/commons/e/ec/Maitreya%2C_2nd_century_CE%2C_Loriyan_Tangai%2C_Gandhara_Gallery%2C_Indian_Museum%2C_Kolkata.-4959-A23500.jpg
+          H33_CH07_quran-folio-kufic.tif|https://upload.wikimedia.org/wikipedia/commons/2/2d/Egypt%3F%2C_Abbasid_Period%2C_9th_century_-_Qur%27an_Manuscript_Folio_%28verso%29_-_1933.493.b_-_Cleveland_Museum_of_Art.tif
+          H37_CH08_aquarius-al-sufi.jpg|https://upload.wikimedia.org/wikipedia/commons/5/53/Book_of_the_Fixed_Stars_Auv0302_Aquarius.jpg
+          H72_CH08_earthrise-apollo-8.jpg|https://raw.githubusercontent.com/ILLorange/Techmanie-fotky-/main/1968%20-%20Apollo%208/NASA-Apollo8-Dec24-Earthrise.jpg
+          H75_CH10_shush-archers-frieze.jpg|https://upload.wikimedia.org/wikipedia/commons/c/cf/Frieze_of_Archers_AOD_488%2C_Louvre_2008.jpg
+          H54_CH05_khufu-solar-boat.jpg|https://upload.wikimedia.org/wikipedia/commons/5/56/GEM_Khufus_Boat_front_2025.jpg
+          H55_CH05_karnak-hypostyle-hall.jpg|https://upload.wikimedia.org/wikipedia/commons/6/6b/Columns_at_Hypostyle_hall_of_Karnak_Temple_in_Luxor_Egypt.jpg
+          H57_CH05_enuma-elish-tablet.jpg|https://upload.wikimedia.org/wikipedia/commons/4/4a/Enuma_Elish_K.3473.jpg
+          H58_CH05_standard-of-ur.jpg|https://upload.wikimedia.org/wikipedia/commons/3/38/Denis_Bourez_-_British_Museum%2C_London_%288747049029%29_%282%29.jpg
+          H61_CH06_ketef-hinom-scrolls.JPG|https://upload.wikimedia.org/wikipedia/commons/a/a4/Ketef_hinom_scrolls.JPG
+          H62_CH06_cyrus-cylinder.jpg|https://upload.wikimedia.org/wikipedia/commons/7/76/Cyrus_Cylinder%2C_Babylon%2C_Iraq%2C_mid_500s_BC%2C_cuneiform_on_clay_-_British_Museum_-_DSC01316.jpg
+          H63_CH06_faravahar-persepolis.jpg|https://upload.wikimedia.org/wikipedia/commons/7/7c/Faravahar_sign_in_Takhte_Jamshid.jpg
+          H66_CH07_sanchi-torana.jpg|https://upload.wikimedia.org/wikipedia/commons/1/1e/East_Torana%2C_Sanchi_01.jpg
+          H53_CH05_narmer-palette.jpg|https://upload.wikimedia.org/wikipedia/commons/b/be/Narmer_Palette.jpg
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add book/images/historical
+          if git diff --cached --quiet; then
+            echo "No changes to commit (files may already exist)"
+            exit 0
+          fi
+          git commit -m "Add historical images (H01…H75) to book/images/historical"
+          git push
