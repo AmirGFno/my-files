@@ -21,13 +21,16 @@ jobs:
           DEST="book/images/historical"
           mkdir -p "$DEST"
           failed=""
+          
+          # هدر User-Agent الزامی برای ویکی‌مدیا
+          UA="Mozilla/5.0 (compatible; MyFilesBot/1.0; +https://github.com/AmirGFno/my-files)"
 
           resolve_wikimedia_url() {
             local fname="$1"
             local stem="${fname%.*}"
             for title in "File:${fname}" "File:${stem}.jpg" "File:${stem}.JPG" "File:${stem}.jpeg" "File:${stem}.png" "File:${stem}.svg" "File:${stem}.tif" "File:${stem}.tiff"; do
               local u
-              u=$(curl -fsSL -G "https://commons.wikimedia.org/w/api.php" \
+              u=$(curl -fsSL -A "$UA" -G "https://commons.wikimedia.org/w/api.php" \
                     --data-urlencode "action=query" \
                     --data-urlencode "titles=$title" \
                     --data-urlencode "prop=imageinfo" \
@@ -45,7 +48,8 @@ jobs:
             echo "::group::$fname"
             ok=0
             
-            if curl -fL --retry 3 --retry-delay 5 -o "$DEST/$fname" "$url"; then
+            # تلاش مستقیم با محدودیت زمانی ۳۰ ثانیه برای Retry (تا ۱۰ دقیقه معطل نشود)
+            if curl -fL -A "$UA" --retry 2 --retry-delay 5 --retry-max-time 30 -o "$DEST/$fname" "$url"; then
               ok=1
             else
               if [[ "$url" == *"upload.wikimedia.org"* ]]; then
@@ -53,7 +57,7 @@ jobs:
                 resolved=$(resolve_wikimedia_url "$fname" || true)
                 if [ -n "$resolved" ]; then
                   echo "Resolved: $resolved"
-                  if curl -fL --retry 3 --retry-delay 5 -o "$DEST/$fname" "$resolved"; then
+                  if curl -fL -A "$UA" --retry 2 --retry-delay 5 --retry-max-time 30 -o "$DEST/$fname" "$resolved"; then
                     ok=1
                   fi
                 fi
@@ -68,6 +72,9 @@ jobs:
               failed="$failed $fname"
             fi
             echo "::endgroup::"
+            
+            # تاخیر ۳ ثانیه‌ای بین هر دانلود برای جلوگیری از مسدود شدن
+            sleep 3
           done <<'EOF'
           H01_CH01_antikythera-mechanism.jpg|https://upload.wikimedia.org/wikipedia/commons/6/63/Antikythera_Mechanism_%28NAMA%29_2017.jpg
           H46_CH01_prague-orloj-dial.jpg|https://upload.wikimedia.org/wikipedia/commons/4/43/Praha_Astronomical_Clock_Dial_01.jpg
