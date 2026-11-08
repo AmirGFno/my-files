@@ -1,0 +1,20 @@
+HTTP/2 200 
+date: Wed, 28 Oct 2026 08:23:03 GMT
+content-type: application/pdf
+content-length: 152718885
+cf-ray: a518894589d3c964-IAD
+accept-ranges: bytes
+access-control-allow-origin: *
+cache-control: public, max-age=3600
+content-disposition: attachment; filename="کچاپ بوک KECHAP_BOOK_ بیستینو قریشی 1406.pdf"
+etag: "f863095c8d842544f02275d41a360998-6"
+last-modified: Tue, 27 Oct 2026 20:52:57 GMT
+server: cloudflare
+access-control-expose-headers: content-range, content-length, accept-ranges
+x-amz-meta-x-file-linkulu: 1
+x-amz-mp-parts-count: 6
+x-robots-tag: noindex, nofollow
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=W5Vj6aC8rWyTHnOQyGWhz2XKGJaS8v2oyLm1xIS6v1eXZHNeqA4evNvKb6NLHap6WNMZxRMimbYf9OuGjoetz8eXUjkpmkesWQtXlMXZeBu%2F98vnNEVSkyGi5e48F3lcMw%3D%3D"}]}
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+alt-svc: h3=":443"; ma=86400
+

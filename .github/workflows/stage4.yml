@@ -1,0 +1,66 @@
+name: stage4-final
+
+on:
+  push:
+    paths: [.ci-s4]
+
+permissions:
+  contents: write
+
+jobs:
+  stage4:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch stage-3 pdf from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p ci docs
+          gh release download v1 -R "${{ github.repository }}" \
+             -p "KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf" --clobber -D .
+          mv KECHAP_BOOK_BISTINO_1406_edges-repaired.pdf input.pdf
+          ls -l input.pdf; sha256sum input.pdf | tee ci/input.txt
+
+      - name: Install deps
+        run: pip install --quiet pymupdf numpy scipy
+
+      - name: Stage 4 - white margin bar, bolder print, JPEG budget
+        env:
+          BAR_FROM: "4"
+          BAR_START_PT: "560"
+          BUDGET_MB: "96"
+          Q_TOP: "86"
+          Q_BOTTOM: "64"
+        run: |
+          F="KECHAP_BOOK_بیست‌ینو قریشی 1406 (نسخه نهایی).pdf"
+          time python tools/finalize_pdf.py input.pdf "$F" final_report.txt 2>&1 | tee ci/final.log
+          echo "STAGE4=$F" >> "$GITHUB_ENV"
+          for f in final_p4 final_p151 final_p283; do [ -f "$f.png" ] && cp "$f.png" "docs/$f.png"; done
+
+      - name: Publish release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          DELETE_OLD: "0"
+        run: |
+          python - <<'PY'
+          import json, os
+          assets = [{"path": os.environ["STAGE4"],
+                     "name": "KECHAP_BOOK_BISTINO_1406_final-under100mb.pdf",
+                     "label": "stage4"}]
+          json.dump(assets, open("/tmp/assets.json", "w", encoding="utf-8"),
+                    ensure_ascii=False)
+          PY
+          ASSETS="$(cat /tmp/assets.json)" python tools/publish_release.py
+
+      - name: Commit report and renders
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add final_report.txt ci docs
+          git commit -m "docs: stage4 final report" || echo none
+          git push || echo skip

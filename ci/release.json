@@ -1,0 +1,18 @@
+{
+  "release_url": "https://github.com/AmirGFno/my-files/releases/tag/v1",
+  "tag": "v1",
+  "assets": [
+    {
+      "name": "KECHAP_BOOK_BISTINO_1406_final-under100mb.pdf",
+      "label": "stage4",
+      "sha256": "d98b05df9bb03cfd5b8ea959c086fd8e5a5a278f685509984b41ecac350ba65d",
+      "size": 56643256,
+      "asset_name": "KECHAP_BOOK_BISTINO_1406_final-under100mb.pdf",
+      "asset_size": 56643256,
+      "browser_download_url": "https://github.com/AmirGFno/my-files/releases/download/v1/KECHAP_BOOK_BISTINO_1406_final-under100mb.pdf",
+      "sha256_remote": "d98b05df9bb03cfd5b8ea959c086fd8e5a5a278f685509984b41ecac350ba65d",
+      "bytes_verified": 56643256,
+      "verified": true
+    }
+  ]
+}
