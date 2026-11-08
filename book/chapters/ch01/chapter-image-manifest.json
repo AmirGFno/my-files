@@ -1,0 +1,67 @@
+[
+  {
+    "id": "A02",
+    "chapter": "CH01",
+    "kind": "original_artwork",
+    "filename": "A02_ch01_opener.jpg",
+    "chapter_path": "book/chapters/ch01/images/originals/A02_ch01_opener.jpg",
+    "status": "generated_reviewed",
+    "width_px": 896,
+    "height_px": 1200,
+    "size_bytes": 132305,
+    "sha256": "03b98099a45e5557b495f4de29e585ee5d1914f27f5c29a553ebb4f2b38162cb",
+    "notes": "تصویر آغاز فصل؛ موجود و بازبینی شده"
+  },
+  {
+    "id": "A17",
+    "chapter": "CH01",
+    "kind": "original_artwork",
+    "filename": "A17_ch01_inner.jpg",
+    "chapter_path": "book/chapters/ch01/images/originals/A17_ch01_inner.jpg",
+    "status": "generated_reviewed",
+    "width_px": 1376,
+    "height_px": 768,
+    "size_bytes": 186500,
+    "sha256": "d9a3865912b434fffca4a8df63245d9cb65a955af2a2dbfc5e9e0b8e5e13f4dd",
+    "notes": "تصویر داخلی فصل؛ موجود و بازبینی شده"
+  },
+  {
+    "id": "H01",
+    "chapter": "CH01",
+    "kind": "historical_documentary",
+    "filename": "H01_CH01_antikythera-mechanism.jpg",
+    "chapter_path": "book/chapters/ch01/images/historical/H01_CH01_antikythera-mechanism.jpg",
+    "status": "pending_agent_download",
+    "width_px": "",
+    "height_px": "",
+    "size_bytes": "",
+    "sha256": "",
+    "notes": "در انتظار دانلود توسط ایجنت جست‌وجو"
+  },
+  {
+    "id": "H45",
+    "chapter": "CH01",
+    "kind": "historical_documentary",
+    "filename": "H45_CH01_dunhuang-star-chart.jpg",
+    "chapter_path": "book/chapters/ch01/images/historical/H45_CH01_dunhuang-star-chart.jpg",
+    "status": "pending_agent_download",
+    "width_px": "",
+    "height_px": "",
+    "size_bytes": "",
+    "sha256": "",
+    "notes": "در انتظار دانلود توسط ایجنت جست‌وجو"
+  },
+  {
+    "id": "H46",
+    "chapter": "CH01",
+    "kind": "historical_documentary",
+    "filename": "H46_CH01_prague-astronomical-clock.jpg",
+    "chapter_path": "book/chapters/ch01/images/historical/H46_CH01_prague-astronomical-clock.jpg",
+    "status": "pending_agent_download",
+    "width_px": "",
+    "height_px": "",
+    "size_bytes": "",
+    "sha256": "",
+    "notes": "در انتظار دانلود توسط ایجنت جست‌وجو"
+  }
+]
