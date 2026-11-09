@@ -301,10 +301,18 @@ class ChapterPDF:
         self.floats.append({"side": side, "x0": x, "x1": x + w,
                             "top": top, "bot": top - h - 4.0})
 
-    def paragraph(self, text: str, *, size=BODY_SIZE, leading=BODY_LEAD,
-                  font="Vazir", color=INK, justify=True, gap=7.0,
-                  indent=0.0, first_indent=0.0):
+    # A block of up to this many lines is never split across a page boundary.
+    KEEP_WHOLE_LINES = 8
+    MIN_SIDE_LINES = 2
+
+    def _measure_paragraph(self, text, *, size, leading, font, indent,
+                           first_indent, gap):
+        """Dry-run the wrap so we know where the block would break, before inking."""
         words = [w for w in text.split(" ") if w]
+        y = self.y
+        floats = [dict(f) for f in self.floats]
+        lines: list[dict] = []
+        page = 0
         i = 0
         first = True
         guard = 0
@@ -312,14 +320,26 @@ class ChapterPDF:
             guard += 1
             if guard > 4000:
                 raise RuntimeError("wrap loop")
-            self.ensure(leading)
-            left, right = self.line_bounds(size, indent)
+            if y - leading < M_BOT:
+                page += 1
+                y = PAGE_H - M_TOP
+                floats = []
+            left, right = M_SIDE + indent, M_SIDE + TEXT_W - indent
+            top, bot = y + size * 1.05 + 1.0, y - size * 0.35 - 1.0
+            for f in floats:
+                if top > f["bot"] and bot < f["top"]:
+                    if f["side"] == "left":
+                        left = max(left, f["x1"] + self.FLOAT_GAP)
+                    else:
+                        right = min(right, f["x0"] - self.FLOAT_GAP)
             if first:
                 left += first_indent
             if right - left < 32 * mm:
-                # too narrow beside a float: drop below it and retry
-                self.clear_floats()
-                continue
+                if floats:
+                    y = min(y, min(f["bot"] for f in floats) - 3 * mm)
+                    floats = []
+                    continue
+                right = left + 32 * mm
             avail = right - left
             line: list[str] = []
             while i < len(words):
@@ -329,19 +349,48 @@ class ChapterPDF:
                     i += 1
                 else:
                     break
-            last = i >= len(words)
-            self.draw_line(" ".join(line), font, size, color,
-                           justify=justify and not last, right=right, left=left,
-                           leading=leading)
+            lines.append({"text": " ".join(line), "left": left,
+                          "right": right, "y": y, "page": page})
+            y -= leading
             first = False
-        self.y -= gap
+        return lines, y - gap, page
+
+    def paragraph(self, text: str, *, size=BODY_SIZE, leading=BODY_LEAD,
+                  font="Vazir", color=INK, justify=True, gap=7.0,
+                  indent=0.0, first_indent=0.0, keep_next_lines=0):
+        kw = dict(size=size, leading=leading, font=font, indent=indent,
+                  first_indent=first_indent, gap=gap)
+        if keep_next_lines:
+            probe, _, _ = self._measure_paragraph(text, **kw)
+            self.ensure(len(probe) * leading + gap + keep_next_lines * BODY_LEAD)
+        lines, end_y, last_page = self._measure_paragraph(text, **kw)
+        if not lines:
+            return
+        if last_page > 0:
+            head = sum(1 for l in lines if l["page"] == 0)
+            tail = sum(1 for l in lines if l["page"] == last_page)
+            # keep short blocks intact; never strand 1 line on either side
+            if (len(lines) <= self.KEEP_WHOLE_LINES
+                    or head < self.MIN_SIDE_LINES or tail < self.MIN_SIDE_LINES):
+                self.new_page()
+                lines, end_y, last_page = self._measure_paragraph(text, **kw)
+        cursor = 0
+        for idx, l in enumerate(lines):
+            while cursor < l["page"]:
+                self.new_page()
+                cursor += 1
+            self.y = l["y"]
+            self.draw_line(l["text"], font, size, color,
+                           justify=justify and idx < len(lines) - 1,
+                           right=l["right"], left=l["left"], leading=leading)
+        self.y = end_y
 
     def divider(self):
         """The only section separator printed in the chapter: rule - dot - rule."""
         if self._last_divider:
             return
         self.clear_floats()
-        self.ensure(20 * mm)
+        self.ensure(20 * mm + 2 * BODY_LEAD)
         self.y -= 7 * mm
         cy = self.y + 2 * mm
         cx = PAGE_W / 2
@@ -430,7 +479,7 @@ class ChapterPDF:
                 x_right -= widths[idx]
             self.y -= row_h + 1.5 * mm
 
-        self.ensure(row_h * 3)
+        self.ensure(row_h * (len(body) + 1) + 14 * mm)
         draw_header()
         for r_idx, row in enumerate(body):
             if self.y - row_h < M_BOT:
@@ -528,7 +577,8 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
             # editorial furniture: never printed inside the narrative
             continue
         else:
-            pdf.paragraph(block.text)
+            lead_in = block.text.rstrip().endswith(":")
+            pdf.paragraph(block.text, keep_next_lines=2 if lead_in else 0)
     pdf.clear_floats()
     pdf.save()
     return out, pdf.page
@@ -601,7 +651,8 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
     rpr.append(szcs)
 
     def rtl(par, align=WD_ALIGN_PARAGRAPH.JUSTIFY, size=None, bold=False,
-            color=None, space_after=6, line=1.6):
+            color=None, space_after=6, line=1.6, keep_together=True,
+            keep_next=False):
         par.alignment = align
         ppr = par._p.get_or_add_pPr()
         b = OxmlElement("w:bidi")
@@ -609,6 +660,9 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
         ppr.append(b)
         par.paragraph_format.space_after = Pt(space_after)
         par.paragraph_format.line_spacing = line
+        par.paragraph_format.widow_control = True
+        par.paragraph_format.keep_together = keep_together
+        par.paragraph_format.keep_with_next = keep_next
         for run in par.runs:
             run.font.name = "Vazirmatn"
             r = run._element.get_or_add_rPr()
@@ -674,7 +728,7 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
             p = doc.add_paragraph()
             p.add_run("\u2014  \u066d  \u2014")
             rtl(p, WD_ALIGN_PARAGRAPH.CENTER, size=12, color=(0x8C, 0x6B, 0x2E),
-                space_after=10, line=1.2)
+                space_after=10, line=1.2, keep_next=True)
             p.paragraph_format.space_before = Pt(10)
             last_divider = True
         elif block.kind == "quote":
@@ -694,18 +748,23 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
             for idx, cell in enumerate(header):
                 c = table.rows[0].cells[idx]
                 c.text = cell
-                rtl(c.paragraphs[0], WD_ALIGN_PARAGRAPH.RIGHT, size=10, bold=True)
-            for row in body:
+                rtl(c.paragraphs[0], WD_ALIGN_PARAGRAPH.RIGHT, size=10, bold=True,
+                    keep_next=True)
+            for r_idx, row in enumerate(body):
                 cells = table.add_row().cells
                 for idx, cell in enumerate(row):
                     cells[idx].text = cell
                     rtl(cells[idx].paragraphs[0], WD_ALIGN_PARAGRAPH.RIGHT,
-                        size=10, space_after=2, line=1.3)
+                        size=10, space_after=2, line=1.3,
+                        keep_next=r_idx < len(body) - 1)
+            for row in table.rows:
+                cant = OxmlElement("w:cantSplit")
+                row._tr.get_or_add_trPr().append(cant)
             doc.add_paragraph()
         else:
             p = doc.add_paragraph()
             p.add_run(block.text)
-            rtl(p)
+            rtl(p, keep_next=block.text.rstrip().endswith(":"))
 
     footer = section.footer.paragraphs[0]
     footer.add_run(BOOK_TITLE)
