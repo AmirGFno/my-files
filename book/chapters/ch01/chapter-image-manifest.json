@@ -106,17 +106,17 @@
     "height_px": 768,
     "size_bytes": 186500,
     "sha256": "d9a3865912b434fffca4a8df63245d9cb65a955af2a2dbfc5e9e0b8e5e13f4dd",
-    "notes": "تصویرسازیِ اختصاصیِ افقی؛ تمام‌عرض، بدون زیرنویس",
+    "notes": "تصویرسازیِ اختصاصیِ افقی؛ در همان صفحه باقی می‌ماند و برای جا شدن کوچک می‌شود (۱۲۸×۷۲ میلی‌متر)",
     "print_derivative": "book/chapters/ch01/images/print/A17_print.jpg",
     "used_in_chapter": true,
-    "placement": "inline",
+    "placement": "inline-shrink-to-fit",
     "section": "هشت — سه قانونِ سفر",
     "source_page": "",
     "source_file": "",
     "creator": "تولید اختصاصی برای این کتاب",
     "license": "Original artwork for this book",
     "caption_fa": "مسافر و راهنما در مرکزِ حلقهٔ دوازده دروازه؛ گفت‌وگوی خاموش، پیش از باز شدنِ دفترِ سفر.",
-    "printed_width": "166mm",
+    "printed_width": "128mm",
     "caption_printed": false
   }
 ]

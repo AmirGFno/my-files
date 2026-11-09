@@ -67,7 +67,14 @@ def parse_markdown(path: Path) -> tuple[str, list[Block]]:
                 body.append(lines[i].rstrip())
                 i += 1
             i += 1
-            if kind == "table":
+            if kind == "footnotes":
+                notes = {}
+                for r in body:
+                    if r.strip():
+                        num, _, val = r.partition("|")
+                        notes[num.strip()] = val.strip()
+                blocks.append(Block("footnotes", attrs=notes))
+            elif kind == "table":
                 rows = [[c.strip() for c in r.split("|")] for r in body if r.strip()]
                 blocks.append(Block("table", attrs=attrs, rows=rows))
             elif kind == "figure":
@@ -202,6 +209,9 @@ class ChapterPDF:
         self.outline_idx = 0
         self.floats: list[dict] = []
         self._last_divider = True   # nothing printed yet
+        self.footnote_defs: dict[str, str] = {}
+        self.page_notes: list[tuple[str, str]] = []
+        self.bottom_limit = M_BOT
 
     # -- page furniture
     def _paper(self):
@@ -210,13 +220,51 @@ class ChapterPDF:
 
     def new_page(self, furniture: bool = True):
         if self.page:
+            self._flush_notes()
             self.c.showPage()
         self.page += 1
         self._paper()
         self.y = PAGE_H - M_TOP
         self.floats = []
+        self.page_notes = []
+        self.bottom_limit = M_BOT
         if furniture:
             self._footer()
+
+    NOTE_SIZE = 6.6
+    NOTE_LEAD = 3.5 * mm
+    NOTE_COLS = 4
+
+    def note_band_height(self, count: int) -> float:
+        rows = (count + self.NOTE_COLS - 1) // self.NOTE_COLS
+        return 3.0 * mm + rows * self.NOTE_LEAD + 1.5 * mm
+
+    def reserve_notes(self, numbers: list[str]):
+        """Hold a strip at the foot of the current page for these footnotes."""
+        pending = [n for n in numbers if n not in {x[0] for x in self.page_notes}]
+        if not pending:
+            return
+        h = self.note_band_height(len(self.page_notes) + len(pending))
+        self.bottom_limit = M_BOT + h
+        self.page_notes.extend((n, self.footnote_defs.get(n, "")) for n in pending)
+
+    def _flush_notes(self):
+        if not self.page_notes:
+            return
+        top = self.bottom_limit - 1.0 * mm
+        self.c.setStrokeColorRGB(0.80, 0.77, 0.70)
+        self.c.setLineWidth(0.4)
+        self.c.line(M_SIDE + TEXT_W * 0.62, top, M_SIDE + TEXT_W, top)
+        col_w = TEXT_W / self.NOTE_COLS
+        y = top - 3.4 * mm
+        for idx, (num, val) in enumerate(self.page_notes):
+            row, col = divmod(idx, self.NOTE_COLS)
+            x_right = M_SIDE + TEXT_W - col * col_w - 1.5 * mm
+            self.c.setFont("Vazir-Light", self.NOTE_SIZE)
+            self.c.setFillColorRGB(*MUTED)
+            # Latin term + Persian numeral: draw in logical order, no bidi pass
+            self.c.drawRightString(x_right, y - row * self.NOTE_LEAD,
+                                   f"{fa(num)}. {val}")
 
     def _footer(self):
         c = self.c
@@ -230,7 +278,7 @@ class ChapterPDF:
         c.drawString(M_SIDE, M_BOT - 12 * mm, shape(fa(self.page)))
 
     def ensure(self, needed: float):
-        if self.y - needed < M_BOT:
+        if self.y - needed < self.bottom_limit:
             self.new_page()
 
     # -- text primitives
@@ -288,7 +336,7 @@ class ChapterPDF:
             iw, ih = im.size
         w = min(width_mm, TEXT_W * 0.52)
         h = w * ih / iw
-        if self.y - h < M_BOT:
+        if self.y - h < self.bottom_limit:
             self.new_page()
         top = self.y + BODY_SIZE * 0.82
         x = M_SIDE if side == "left" else M_SIDE + TEXT_W - w
@@ -320,7 +368,7 @@ class ChapterPDF:
             guard += 1
             if guard > 4000:
                 raise RuntimeError("wrap loop")
-            if y - leading < M_BOT:
+            if y - leading < self.bottom_limit:
                 page += 1
                 y = PAGE_H - M_TOP
                 floats = []
@@ -441,15 +489,29 @@ class ChapterPDF:
         self.y = top - h - 8 * mm
 
     def figure(self, image_id: str):
-        """Full-width plate. Used for the book's own landscape artwork."""
+        """Full-width plate. Shrinks to fit the space left on this page instead of
+        jumping to the next one; only moves if even the minimum size cannot fit."""
         self.clear_floats()
         self._last_divider = False
         path = self.images[image_id]
         with Image.open(path) as im:
             iw, ih = im.size
-        scale = min(TEXT_W / iw, (110 * mm) / ih)
-        w, h = iw * scale, ih * scale
-        self.ensure(h + 10 * mm)
+        room = self.y - self.bottom_limit - 9 * mm
+        full_w = TEXT_W
+        full_h = full_w * ih / iw
+        min_w = TEXT_W * 0.45
+        w = full_w
+        h = full_h
+        if h > room:
+            if room >= min_w * ih / iw:
+                h = room
+                w = h * iw / ih
+            else:
+                self.new_page()
+                room = self.y - self.bottom_limit - 9 * mm
+                h = min(full_h, room)
+                w = h * iw / ih
+        self.ensure(h + 9 * mm)
         top = self.y + 1 * mm
         x = M_SIDE + (TEXT_W - w) / 2
         self.c.drawImage(ImageReader(str(path)), x, top - h, w, h,
@@ -479,10 +541,15 @@ class ChapterPDF:
                 x_right -= widths[idx]
             self.y -= row_h + 1.5 * mm
 
+        markers = [m for r in body for m in re.findall(r"\[(\d+)\]", " ".join(r))]
+        if markers:
+            self.ensure(row_h * (len(body) + 1) + 14 * mm
+                        + self.note_band_height(len(markers)))
+            self.reserve_notes(markers)
         self.ensure(row_h * (len(body) + 1) + 14 * mm)
         draw_header()
         for r_idx, row in enumerate(body):
-            if self.y - row_h < M_BOT:
+            if self.y - row_h < self.bottom_limit:
                 self.new_page()
                 draw_header()
             if r_idx % 2 == 0:
@@ -492,9 +559,18 @@ class ChapterPDF:
             x_right = M_SIDE + TEXT_W
             for idx, cell in enumerate(row):
                 font = "Vazir-Med" if idx in (0, 2) else "Vazir"
+                mark = re.search(r"\[(\d+)\]", cell)
+                label = re.sub(r"\[\d+\]", "", cell)
                 self.c.setFont(font, 9.6)
                 self.c.setFillColorRGB(*(GOLD if idx == 2 else INK))
-                self.c.drawRightString(x_right - 2.5 * mm, self.y - 2.2 * mm, shape(cell))
+                shown = shape(label)
+                self.c.drawRightString(x_right - 2.5 * mm, self.y - 2.2 * mm, shown)
+                if mark:
+                    wlab = pdfmetrics.stringWidth(shown, font, 9.6)
+                    self.c.setFont("Vazir-Light", 5.6)
+                    self.c.setFillColorRGB(*MUTED)
+                    self.c.drawRightString(x_right - 2.5 * mm - wlab - 0.5 * mm,
+                                           self.y - 0.5 * mm, fa(mark.group(1)))
                 x_right -= widths[idx]
             self.c.setStrokeColorRGB(0.86, 0.83, 0.77)
             self.c.setLineWidth(0.4)
@@ -542,6 +618,7 @@ class ChapterPDF:
         c.drawCentredString(PAGE_W / 2, PAGE_H - 63 * mm, shape(BOOK_TITLE))
 
     def save(self):
+        self._flush_notes()
         self.c.save()
 
 
@@ -549,6 +626,9 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
     out = chapter_dir / "build" / "chapter-01-fa.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)
     pdf = ChapterPDF(out, title, images)
+    for b in blocks:
+        if b.kind == "footnotes":
+            pdf.footnote_defs.update(b.attrs)
     _, _, subtitle = title.partition("|")
     pdf.opener(images["A02"], title, subtitle.strip())
     pdf.c.bookmarkPage("chapter-01")
@@ -573,8 +653,8 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
             pdf.ornament()
         elif block.kind == "table":
             pdf.table(block.rows)
-        elif block.kind in ("meta", "note", "credits", "internal"):
-            # editorial furniture: never printed inside the narrative
+        elif block.kind in ("meta", "note", "credits", "internal", "footnotes"):
+            # editorial furniture / definitions: not printed as a block
             continue
         else:
             lead_in = block.text.rstrip().endswith(":")
@@ -619,6 +699,70 @@ def docx_tight_wrap(paragraph, side: str = "left", dist_mm: float = 4.0):
     inline.getparent().replace(inline, anchor)
 
 
+def docx_add_footnotes(path: Path, notes: dict[str, str]):
+    """Inject a real Word footnotes part so the terms sit at the foot of the page."""
+    import shutil
+    import zipfile
+    from xml.sax.saxutils import escape
+
+    W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    CT = "http://schemas.openxmlformats.org/package/2006/content-types"
+    sep = ('<w:footnote w:type="separator" w:id="-1"><w:p><w:pPr>'
+           '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>'
+           '<w:r><w:separator/></w:r></w:p></w:footnote>'
+           '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:pPr>'
+           '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>'
+           '<w:r><w:continuationSeparator/></w:r></w:p></w:footnote>')
+    body = []
+    for num, val in sorted(notes.items(), key=lambda kv: int(kv[0])):
+        body.append(
+            f'<w:footnote w:id="{int(num)}"><w:p><w:pPr>'
+            '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>'
+            '<w:jc w:val="left"/></w:pPr>'
+            '<w:r><w:rPr><w:vertAlign w:val="superscript"/><w:sz w:val="14"/>'
+            '</w:rPr><w:footnoteRef/></w:r>'
+            '<w:r><w:rPr><w:rFonts w:ascii="Vazirmatn" w:hAnsi="Vazirmatn" '
+            'w:cs="Vazirmatn"/><w:sz w:val="14"/><w:szCs w:val="14"/></w:rPr>'
+            f'<w:t xml:space="preserve"> {escape(val)}</w:t></w:r>'
+            '</w:p></w:footnote>')
+    footnotes = (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                 f'<w:footnotes xmlns:w="{W}">{sep}{"".join(body)}</w:footnotes>')
+
+    tmp = path.with_suffix(".tmp.docx")
+    with zipfile.ZipFile(path) as zin, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename == "[Content_Types].xml":
+                txt = data.decode("utf-8")
+                override = ('<Override PartName="/word/footnotes.xml" '
+                            'ContentType="application/vnd.openxmlformats-officedocument'
+                            '.wordprocessingml.footnotes+xml"/>')
+                txt = txt.replace("</Types>", override + "</Types>")
+                data = txt.encode("utf-8")
+            elif item.filename == "word/_rels/document.xml.rels":
+                txt = data.decode("utf-8")
+                ids = {int(m) for m in re.findall(r'Id="rId(\d+)"', txt)}
+                new_id = f"rId{max(ids) + 1 if ids else 1}"
+                rel = (f'<Relationship Id="{new_id}" Type="{R}/footnotes" '
+                       'Target="footnotes.xml"/>')
+                txt = txt.replace("</Relationships>", rel + "</Relationships>")
+                data = txt.encode("utf-8")
+            elif item.filename == "word/settings.xml":
+                txt = data.decode("utf-8")
+                if "<w:footnotePr" not in txt:
+                    pr = ('<w:footnotePr><w:numFmt w:val="hindiArabic"/>'
+                          '<w:restartEachPage w:val="false"/></w:footnotePr>')
+                    if "<w:compat>" in txt:
+                        txt = txt.replace("<w:compat>", pr + "<w:compat>", 1)
+                    else:
+                        txt = txt.replace("</w:settings>", pr + "</w:settings>")
+                data = txt.encode("utf-8")
+            zout.writestr(item, data)
+        zout.writestr("word/footnotes.xml", footnotes.encode("utf-8"))
+    shutil.move(str(tmp), str(path))
+
+
 # ---------------------------------------------------------------- DOCX
 def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[str, Path]):
     from docx import Document
@@ -628,6 +772,10 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
     from docx.oxml.ns import qn
     from docx.shared import Mm, Pt, RGBColor
 
+    note_defs: dict[str, str] = {}
+    for b in blocks:
+        if b.kind == "footnotes":
+            note_defs.update(b.attrs)
     doc = Document()
     section = doc.sections[0]
     section.page_width, section.page_height = Mm(210), Mm(297)
@@ -692,7 +840,7 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
 
     last_divider = True
     for block in blocks:
-        if block.kind in ("meta", "note", "credits", "internal"):
+        if block.kind in ("meta", "note", "credits", "internal", "footnotes"):
             continue
         if block.kind == "figure" and block.attrs.get("placement") == "opener":
             pass
@@ -747,16 +895,23 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
             tblpr.append(bidi_vis)
             for idx, cell in enumerate(header):
                 c = table.rows[0].cells[idx]
-                c.text = cell
+                c.paragraphs[0].add_run(cell)
                 rtl(c.paragraphs[0], WD_ALIGN_PARAGRAPH.RIGHT, size=10, bold=True,
                     keep_next=True)
             for r_idx, row in enumerate(body):
                 cells = table.add_row().cells
                 for idx, cell in enumerate(row):
-                    cells[idx].text = cell
-                    rtl(cells[idx].paragraphs[0], WD_ALIGN_PARAGRAPH.RIGHT,
-                        size=10, space_after=2, line=1.3,
-                        keep_next=r_idx < len(body) - 1)
+                    para = cells[idx].paragraphs[0]
+                    mark = re.search(r"\[(\d+)\]", cell)
+                    para.add_run(re.sub(r"\[\d+\]", "", cell))
+                    if mark:
+                        run = para.add_run()
+                        run.font.superscript = True
+                        ref = OxmlElement("w:footnoteReference")
+                        ref.set(qn("w:id"), mark.group(1))
+                        run._r.append(ref)
+                    rtl(para, WD_ALIGN_PARAGRAPH.RIGHT, size=10, space_after=2,
+                        line=1.3, keep_next=r_idx < len(body) - 1)
             for row in table.rows:
                 cant = OxmlElement("w:cantSplit")
                 row._tr.get_or_add_trPr().append(cant)
@@ -773,6 +928,10 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
     out = chapter_dir / "build" / "chapter-01-fa.docx"
     out.parent.mkdir(parents=True, exist_ok=True)
     doc.save(out)
+    used = {m for b in blocks if b.kind == "table"
+            for r in b.rows for m in re.findall(r"\[(\d+)\]", " ".join(r))}
+    if used:
+        docx_add_footnotes(out, {k: v for k, v in note_defs.items() if k in used})
     return out
 
 
