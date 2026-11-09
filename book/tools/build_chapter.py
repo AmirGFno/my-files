@@ -373,6 +373,11 @@ class ChapterPDF:
             guard += 1
             if guard > 4000:
                 raise RuntimeError("wrap loop")
+            if not tail_fit and y - leading < self.bottom_limit:
+                page += 1
+                y = PAGE_H - M_TOP
+                floats = []
+                continue
             left, right = M_SIDE + indent, M_SIDE + TEXT_W - indent
             top, bot = y + size * 1.05 + 1.0, y - size * 0.35 - 1.0
             for f in floats:
