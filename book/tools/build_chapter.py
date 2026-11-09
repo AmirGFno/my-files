@@ -354,8 +354,13 @@ class ChapterPDF:
     MIN_SIDE_LINES = 2
 
     def _measure_paragraph(self, text, *, size, leading, font, indent,
-                           first_indent, gap):
-        """Dry-run the wrap so we know where the block would break, before inking."""
+                           first_indent, gap, tail_fit=False):
+        """Dry-run the wrap so we know where the block would break, before inking.
+
+        With tail_fit, a final line only reserves its ink descent instead of a
+        full leading below the baseline. This lets a chapter's closing sentence
+        sit at the foot of the page without stranding it on a near-blank page.
+        """
         words = [w for w in text.split(" ") if w]
         y = self.y
         floats = [dict(f) for f in self.floats]
@@ -368,10 +373,6 @@ class ChapterPDF:
             guard += 1
             if guard > 4000:
                 raise RuntimeError("wrap loop")
-            if y - leading < self.bottom_limit:
-                page += 1
-                y = PAGE_H - M_TOP
-                floats = []
             left, right = M_SIDE + indent, M_SIDE + TEXT_W - indent
             top, bot = y + size * 1.05 + 1.0, y - size * 0.35 - 1.0
             for f in floats:
@@ -390,24 +391,35 @@ class ChapterPDF:
                 right = left + 32 * mm
             avail = right - left
             line: list[str] = []
-            while i < len(words):
-                trial = " ".join(line + [words[i]])
+            j = i
+            while j < len(words):
+                trial = " ".join(line + [words[j]])
                 if width(trial, font, size) <= avail or not line:
-                    line.append(words[i])
-                    i += 1
+                    line.append(words[j])
+                    j += 1
                 else:
                     break
+            needed = leading
+            if tail_fit and j == len(words):
+                needed = size * 0.35 + 1.0
+            if y - needed < self.bottom_limit:
+                page += 1
+                y = PAGE_H - M_TOP
+                floats = []
+                continue
             lines.append({"text": " ".join(line), "left": left,
                           "right": right, "y": y, "page": page})
+            i = j
             y -= leading
             first = False
         return lines, y - gap, page
 
     def paragraph(self, text: str, *, size=BODY_SIZE, leading=BODY_LEAD,
                   font="Vazir", color=INK, justify=True, gap=7.0,
-                  indent=0.0, first_indent=0.0, keep_next_lines=0):
+                  indent=0.0, first_indent=0.0, keep_next_lines=0,
+                  tail_fit=False):
         kw = dict(size=size, leading=leading, font=font, indent=indent,
-                  first_indent=first_indent, gap=gap)
+                  first_indent=first_indent, gap=gap, tail_fit=tail_fit)
         if keep_next_lines:
             probe, _, _ = self._measure_paragraph(text, **kw)
             self.ensure(len(probe) * leading + gap + keep_next_lines * BODY_LEAD)
@@ -634,7 +646,11 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
     pdf.c.bookmarkPage("chapter-01")
     pdf.c.addOutlineEntry(title, "chapter-01", level=0, closed=False)
     pdf.new_page()
-    for block in blocks:
+    last_text_idx = max(
+        (i for i, b in enumerate(blocks) if b.kind in ("para", "quote")),
+        default=-1,
+    )
+    for block_idx, block in enumerate(blocks):
         if block.kind == "figure":
             placement = block.attrs.get("placement", "")
             if placement.startswith("float-"):
@@ -658,7 +674,11 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
             continue
         else:
             lead_in = block.text.rstrip().endswith(":")
-            pdf.paragraph(block.text, keep_next_lines=2 if lead_in else 0)
+            pdf.paragraph(
+                block.text,
+                keep_next_lines=2 if lead_in else 0,
+                tail_fit=block_idx == last_text_idx,
+            )
     pdf.clear_floats()
     pdf.save()
     return out, pdf.page
