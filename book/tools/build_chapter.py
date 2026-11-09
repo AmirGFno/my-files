@@ -100,6 +100,7 @@ IMAGE_SOURCES = {
     "A17": ROOT / "book/images/originals/A17_ch01_inner.jpg",
     "H01": ROOT / "book/images/historical/H01_CH01_antikythera-mechanism.jpg",
     "H46": ROOT / "book/images/historical/H46_CH01_prague-orloj-dial.jpg",
+    "H45": ROOT / "book/chapters/ch01/images/historical/H45_CH01_dunhuang-star-chart.png",
 }
 
 
@@ -199,6 +200,7 @@ class ChapterPDF:
         self.y = PAGE_H - M_TOP
         self.page = 0
         self.outline_idx = 0
+        self.floats: list[dict] = []
 
     # -- page furniture
     def _paper(self):
@@ -211,6 +213,7 @@ class ChapterPDF:
         self.page += 1
         self._paper()
         self.y = PAGE_H - M_TOP
+        self.floats = []
         if furniture:
             self._footer()
 
@@ -253,22 +256,82 @@ class ChapterPDF:
         c.drawText(t)
         self.y -= leading if leading else size * 1.5
 
+    FLOAT_GAP = 4.5 * mm
+
+    def line_bounds(self, size: float, indent: float = 0.0) -> tuple[float, float]:
+        """Usable horizontal span of the next line, minus any live float."""
+        left = M_SIDE + indent
+        right = M_SIDE + TEXT_W - indent
+        top, bot = self.y + size * 0.82, self.y - size * 0.30
+        for f in self.floats:
+            if top > f["bot"] and bot < f["top"]:
+                if f["side"] == "left":
+                    left = max(left, f["x1"] + self.FLOAT_GAP)
+                else:
+                    right = min(right, f["x0"] - self.FLOAT_GAP)
+        return left, right
+
+    def clear_floats(self):
+        if self.floats:
+            self.y = min(self.y, min(f["bot"] for f in self.floats) - 3 * mm)
+            self.floats = []
+
+    def float_figure(self, image_id: str, side: str, width_mm: float):
+        """Place a small image flush to one margin; following text wraps around it."""
+        path = self.images[image_id]
+        with Image.open(path) as im:
+            iw, ih = im.size
+        w = min(width_mm, TEXT_W * 0.52)
+        h = w * ih / iw
+        if self.y - h < M_BOT:
+            self.new_page()
+        top = self.y + BODY_SIZE * 0.82
+        x = M_SIDE if side == "left" else M_SIDE + TEXT_W - w
+        self.c.drawImage(ImageReader(str(path)), x, top - h, w, h,
+                         preserveAspectRatio=True, mask="auto")
+        self.c.setStrokeColorRGB(0.78, 0.74, 0.66)
+        self.c.setLineWidth(0.5)
+        self.c.rect(x, top - h, w, h, stroke=1, fill=0)
+        self.floats.append({"side": side, "x0": x, "x1": x + w,
+                            "top": top, "bot": top - h})
+
     def paragraph(self, text: str, *, size=BODY_SIZE, leading=BODY_LEAD,
                   font="Vazir", color=INK, justify=True, gap=7.0,
                   indent=0.0, first_indent=0.0):
-        right = M_SIDE + TEXT_W - indent
-        left = M_SIDE + indent
-        lines = wrap(text, font, size, right - left)
-        for idx, line in enumerate(lines):
+        words = [w for w in text.split(" ") if w]
+        i = 0
+        first = True
+        guard = 0
+        while i < len(words):
+            guard += 1
+            if guard > 4000:
+                raise RuntimeError("wrap loop")
             self.ensure(leading)
-            last = idx == len(lines) - 1
-            li = left + (first_indent if idx == 0 else 0)
-            self.draw_line(line, font, size, color,
-                           justify=justify and not last, right=right, left=li,
+            left, right = self.line_bounds(size, indent)
+            if first:
+                left += first_indent
+            if right - left < 32 * mm:
+                # too narrow beside a float: drop below it and retry
+                self.clear_floats()
+                continue
+            avail = right - left
+            line: list[str] = []
+            while i < len(words):
+                trial = " ".join(line + [words[i]])
+                if width(trial, font, size) <= avail or not line:
+                    line.append(words[i])
+                    i += 1
+                else:
+                    break
+            last = i >= len(words)
+            self.draw_line(" ".join(line), font, size, color,
+                           justify=justify and not last, right=right, left=left,
                            leading=leading)
+            first = False
         self.y -= gap
 
     def heading(self, text: str):
+        self.clear_floats()
         self.ensure(BODY_LEAD * 2.4)
         self.y -= 8
         key = f"sec-{self.outline_idx}"
@@ -289,6 +352,7 @@ class ChapterPDF:
                        justify=False, indent=10 * mm, gap=8)
 
     def ornament(self):
+        self.clear_floats()
         self.ensure(16 * mm)
         self.y -= 4 * mm
         cy = self.y + 2 * mm
@@ -359,25 +423,30 @@ class ChapterPDF:
         self.y -= 5 * mm
 
     def table(self, rows: list[list[str]]):
+        self.clear_floats()
         header, *body = rows
         cols = len(header)
         weights = [0.13, 0.20, 0.26, 0.41] if cols == 4 else [1 / cols] * cols
         widths = [TEXT_W * w for w in weights]
         row_h = 8.2 * mm
+
+        def draw_header():
+            self.c.setFillColorRGB(0.16, 0.17, 0.22)
+            self.c.rect(M_SIDE, self.y - row_h + 3 * mm, TEXT_W, row_h, stroke=0, fill=1)
+            x_right = M_SIDE + TEXT_W
+            for idx, cell in enumerate(header):
+                self.c.setFont("Vazir-Med", 9.8)
+                self.c.setFillColorRGB(0.97, 0.95, 0.90)
+                self.c.drawRightString(x_right - 2.5 * mm, self.y - 2.4 * mm, shape(cell))
+                x_right -= widths[idx]
+            self.y -= row_h + 1.5 * mm
+
         self.ensure(row_h * 3)
-        # header
-        self.c.setFillColorRGB(0.16, 0.17, 0.22)
-        self.c.rect(M_SIDE, self.y - row_h + 3 * mm, TEXT_W, row_h, stroke=0, fill=1)
-        x_right = M_SIDE + TEXT_W
-        for idx, cell in enumerate(header):
-            cw = widths[idx]
-            self.c.setFont("Vazir-Med", 9.8)
-            self.c.setFillColorRGB(0.97, 0.95, 0.90)
-            self.c.drawRightString(x_right - 2.5 * mm, self.y - 2.4 * mm, shape(cell))
-            x_right -= cw
-        self.y -= row_h + 1.5 * mm
+        draw_header()
         for r_idx, row in enumerate(body):
-            self.ensure(row_h)
+            if self.y - row_h < M_BOT:
+                self.new_page()
+                draw_header()
             if r_idx % 2 == 0:
                 self.c.setFillColorRGB(0.945, 0.935, 0.91)
                 self.c.rect(M_SIDE, self.y - row_h + 3.2 * mm, TEXT_W, row_h,
@@ -451,12 +520,15 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
     pdf.new_page()
     for block in blocks:
         if block.kind == "figure":
-            if block.attrs.get("placement") == "opener":
-                continue
-            pdf.figure(block.attrs["id"], block.text)
-        elif block.kind == "meta":
-            pdf.meta_card(block.text)
-        elif block.kind == "heading":
+            placement = block.attrs.get("placement", "")
+            if placement.startswith("float-"):
+                side = placement.split("-", 1)[1]
+                w = float(block.attrs.get("width", "60mm").replace("mm", "")) * mm
+                pdf.float_figure(block.attrs["id"], side, w)
+            elif placement == "inline":
+                pdf.figure(block.attrs["id"], "")
+            continue
+        if block.kind == "heading":
             pdf.heading(block.text)
         elif block.kind == "quote":
             pdf.quote(block.text)
@@ -464,19 +536,49 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
             pdf.ornament()
         elif block.kind == "table":
             pdf.table(block.rows)
-        elif block.kind == "note":
-            pdf.ensure(20 * mm)
-            pdf.y -= 4 * mm
-            pdf.paragraph(block.text, font="Vazir-Med", size=11, color=GOLD,
-                          justify=False, gap=4)
-        elif block.kind == "credits":
-            pdf.credits(block.text)
-        elif block.kind == "internal":
+        elif block.kind in ("meta", "note", "credits", "internal"):
+            # editorial furniture: never printed inside the narrative
             continue
         else:
             pdf.paragraph(block.text)
+    pdf.clear_floats()
     pdf.save()
     return out, pdf.page
+
+
+def docx_tight_wrap(paragraph, side: str = "left", dist_mm: float = 4.0):
+    """Convert the inline picture in `paragraph` into a floating, tight-wrapped one."""
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls, qn
+
+    inline = paragraph._p.find(".//" + qn("wp:inline"))
+    if inline is None:
+        return
+    extent = inline.find(qn("wp:extent"))
+    cx, cy = extent.get("cx"), extent.get("cy")
+    dist = str(int(dist_mm * 36000))
+    anchor = parse_xml(
+        f'<wp:anchor {nsdecls("wp", "a", "pic", "r")} distT="0" distB="0" '
+        f'distL="{dist}" distR="{dist}" simplePos="0" relativeHeight="251658240" '
+        'behindDoc="0" locked="0" layoutInCell="1" allowOverlap="0">'
+        '<wp:simplePos x="0" y="0"/>'
+        f'<wp:positionH relativeFrom="column"><wp:align>{side}</wp:align></wp:positionH>'
+        '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>'
+        f'<wp:extent cx="{cx}" cy="{cy}"/>'
+        '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+        '<wp:wrapTight wrapText="bothSides">'
+        '<wp:wrapPolygon edited="0">'
+        '<wp:start x="0" y="0"/><wp:lineTo x="0" y="21600"/>'
+        '<wp:lineTo x="21600" y="21600"/><wp:lineTo x="21600" y="0"/>'
+        '<wp:lineTo x="0" y="0"/>'
+        '</wp:wrapPolygon></wp:wrapTight>'
+        '</wp:anchor>'
+    )
+    for tag in ("wp:docPr", "wp:cNvGraphicFramePr", "a:graphic"):
+        el = inline.find(qn(tag))
+        if el is not None:
+            anchor.append(el)
+    inline.getparent().replace(inline, anchor)
 
 
 # ---------------------------------------------------------------- DOCX
@@ -549,31 +651,28 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
     for block in blocks:
         if block.kind == "figure":
             image_id = block.attrs["id"]
+            placement = block.attrs.get("placement", "")
             p = doc.add_paragraph()
-            rtl(p, WD_ALIGN_PARAGRAPH.CENTER, space_after=3)
+            rtl(p, WD_ALIGN_PARAGRAPH.CENTER, space_after=0)
             run = p.add_run()
             with Image.open(images[image_id]) as im:
                 iw, ih = im.size
-            width_mm = 150 if block.attrs.get("placement") == "opener" else 160
+            if placement.startswith("float-"):
+                width_mm = min(float(block.attrs.get("width", "60mm").replace("mm", "")), 82)
+            elif placement == "opener":
+                width_mm = 150
+            else:
+                width_mm = 120
             height_mm = width_mm * ih / iw
             if height_mm > 150:
                 height_mm = 150
                 width_mm = height_mm * iw / ih
             run.add_picture(str(images[image_id]), width=Mm(width_mm))
-            cap = doc.add_paragraph()
-            cap.add_run(f"{image_id} — {block.text}")
-            rtl(cap, WD_ALIGN_PARAGRAPH.RIGHT, size=9, color=(0x6B, 0x6E, 0x78),
-                space_after=10, line=1.35)
-        elif block.kind == "meta":
-            for row in block.text.splitlines():
-                if not row.strip():
-                    continue
-                label, _, value = row.partition(":")
-                p = doc.add_paragraph()
-                p.add_run(label.strip() + ": ").bold = True
-                p.add_run(value.strip())
-                rtl(p, WD_ALIGN_PARAGRAPH.RIGHT, size=10.5, space_after=3, line=1.4)
-            doc.add_paragraph()
+            if placement.startswith("float-"):
+                docx_tight_wrap(p, placement.split("-", 1)[1])
+                p.paragraph_format.space_after = Pt(0)
+                p.paragraph_format.space_before = Pt(0)
+                p.paragraph_format.line_spacing = Pt(1)
         elif block.kind == "heading":
             p = doc.add_paragraph()
             p.add_run(block.text)
@@ -588,7 +687,7 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
             p.paragraph_format.right_indent = Mm(10)
         elif block.kind == "hr":
             p = doc.add_paragraph()
-            p.add_run("⁂")
+            p.add_run("\u2042")
             rtl(p, WD_ALIGN_PARAGRAPH.CENTER, size=12, color=(0x8C, 0x6B, 0x2E))
         elif block.kind == "table":
             header, *body = block.rows
@@ -609,24 +708,7 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
                     rtl(cells[idx].paragraphs[0], WD_ALIGN_PARAGRAPH.RIGHT,
                         size=10, space_after=2, line=1.3)
             doc.add_paragraph()
-        elif block.kind == "note":
-            p = doc.add_paragraph()
-            p.add_run(block.text)
-            rtl(p, WD_ALIGN_PARAGRAPH.CENTER, size=11, bold=True,
-                color=(0x8C, 0x6B, 0x2E))
-        elif block.kind == "credits":
-            doc.add_page_break()
-            p = doc.add_paragraph()
-            p.add_run("زیرنویس‌ها و اعتبارات تصاویر این فصل")
-            rtl(p, WD_ALIGN_PARAGRAPH.RIGHT, size=14, bold=True)
-            for line in block.text.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                p = doc.add_paragraph()
-                p.add_run(line)
-                rtl(p, WD_ALIGN_PARAGRAPH.JUSTIFY, size=10, line=1.5)
-        elif block.kind == "internal":
+        elif block.kind in ("meta", "note", "credits", "internal"):
             continue
         else:
             p = doc.add_paragraph()
@@ -652,11 +734,18 @@ def main():
     images = prepare_images(chapter_dir, ids)
     pdf_path, pages = build_pdf(chapter_dir, title, blocks, images)
     docx_path = build_docx(chapter_dir, title, blocks, images)
+    credits = [b.text for b in blocks if b.kind == "credits"]
+    if credits:
+        cpath = chapter_dir / "build" / "image-credits.md"
+        cpath.write_text("# اعتبارات تصاویر فصل یکم\n\n"
+                         "این فهرست داخل روایت چاپ نمی‌شود؛ در پایان‌نامهٔ منابعِ کتاب ادغام خواهد شد.\n\n"
+                         + "\n\n".join(credits) + "\n", encoding="utf-8")
     words = len(re.findall(r"\S+", " ".join(b.text for b in blocks if b.kind in
                                           ("para", "quote", "heading"))))
     print(f"PDF : {pdf_path.relative_to(ROOT)}  ({fa(pages)} pages)")
     print(f"DOCX: {docx_path.relative_to(ROOT)}")
     print(f"Narrative words: {fa(words)} | figures: {', '.join(ids)}")
+    print("Credits: build/image-credits.md (not printed inside the chapter)")
 
 
 if __name__ == "__main__":
