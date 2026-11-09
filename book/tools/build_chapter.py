@@ -201,6 +201,7 @@ class ChapterPDF:
         self.page = 0
         self.outline_idx = 0
         self.floats: list[dict] = []
+        self._last_divider = True   # nothing printed yet
 
     # -- page furniture
     def _paper(self):
@@ -235,6 +236,7 @@ class ChapterPDF:
     # -- text primitives
     def draw_line(self, text: str, font: str, size: float, color, justify=False,
                   right=None, left=None, leading=None):
+        self._last_divider = False
         right = M_SIDE + TEXT_W if right is None else right
         left = M_SIDE if left is None else left
         avail = right - left
@@ -246,11 +248,14 @@ class ChapterPDF:
         t.setTextOrigin(left, self.y)
         t.setFont(font, size)
         spaces = text.count(" ")
+        # PDF word spacing (Tw) lives in the text state and survives BT/ET, so it
+        # must be reset explicitly on every line or justified spacing leaks into
+        # the following right-aligned lines and pushes them past the margin.
         if justify and spaces and natural < avail:
             t.setWordSpace((avail - natural) / spaces)
             t.textOut(displayed)
         else:
-            # right aligned
+            t.setWordSpace(0)
             t.setTextOrigin(right - natural, self.y)
             t.textOut(displayed)
         c.drawText(t)
@@ -262,7 +267,7 @@ class ChapterPDF:
         """Usable horizontal span of the next line, minus any live float."""
         left = M_SIDE + indent
         right = M_SIDE + TEXT_W - indent
-        top, bot = self.y + size * 0.82, self.y - size * 0.30
+        top, bot = self.y + size * 1.05 + 1.0, self.y - size * 0.35 - 1.0
         for f in self.floats:
             if top > f["bot"] and bot < f["top"]:
                 if f["side"] == "left":
@@ -292,8 +297,9 @@ class ChapterPDF:
         self.c.setStrokeColorRGB(0.78, 0.74, 0.66)
         self.c.setLineWidth(0.5)
         self.c.rect(x, top - h, w, h, stroke=1, fill=0)
+        # 4pt keep-out margin below the plate so no glyph box can clip its corner
         self.floats.append({"side": side, "x0": x, "x1": x + w,
-                            "top": top, "bot": top - h})
+                            "top": top, "bot": top - h - 4.0})
 
     def paragraph(self, text: str, *, size=BODY_SIZE, leading=BODY_LEAD,
                   font="Vazir", color=INK, justify=True, gap=7.0,
@@ -330,20 +336,23 @@ class ChapterPDF:
             first = False
         self.y -= gap
 
-    def heading(self, text: str):
+    def divider(self):
+        """The only section separator printed in the chapter: rule - dot - rule."""
+        if self._last_divider:
+            return
         self.clear_floats()
-        self.ensure(BODY_LEAD * 2.4)
-        self.y -= 8
-        key = f"sec-{self.outline_idx}"
-        self.outline_idx += 1
-        self.c.bookmarkPage(key)
-        self.c.addOutlineEntry(text, key, level=0, closed=False)
+        self.ensure(20 * mm)
+        self.y -= 7 * mm
+        cy = self.y + 2 * mm
+        cx = PAGE_W / 2
+        self.c.setStrokeColorRGB(*GOLD)
+        self.c.setLineWidth(0.6)
+        self.c.line(cx - 20 * mm, cy, cx - 4.5 * mm, cy)
+        self.c.line(cx + 4.5 * mm, cy, cx + 20 * mm, cy)
         self.c.setFillColorRGB(*GOLD)
-        self.c.rect(M_SIDE + TEXT_W - 2.2 * mm, self.y - 1.0 * mm, 2.2 * mm, 6.2 * mm,
-                    stroke=0, fill=1)
-        self.draw_line(text, "Vazir-Bold", 14.2, INK, justify=False,
-                       right=M_SIDE + TEXT_W - 5 * mm, leading=BODY_LEAD * 1.25)
-        self.y -= 3
+        self.c.circle(cx, cy, 0.9 * mm, stroke=0, fill=1)
+        self.y -= 9 * mm
+        self._last_divider = True
 
     def quote(self, text: str):
         self.ensure(BODY_LEAD * 2)
@@ -352,18 +361,7 @@ class ChapterPDF:
                        justify=False, indent=10 * mm, gap=8)
 
     def ornament(self):
-        self.clear_floats()
-        self.ensure(16 * mm)
-        self.y -= 4 * mm
-        cy = self.y + 2 * mm
-        cx = PAGE_W / 2
-        self.c.setStrokeColorRGB(*GOLD)
-        self.c.setLineWidth(0.6)
-        self.c.line(cx - 22 * mm, cy, cx - 5 * mm, cy)
-        self.c.line(cx + 5 * mm, cy, cx + 22 * mm, cy)
-        self.c.setFillColorRGB(*GOLD)
-        self.c.circle(cx, cy, 1.1 * mm, stroke=0, fill=1)
-        self.y -= 6 * mm
+        self.divider()
 
     def meta_card(self, text: str):
         rows = [r for r in text.splitlines() if r.strip()]
@@ -393,37 +391,28 @@ class ChapterPDF:
             y -= line_h
         self.y = top - h - 8 * mm
 
-    def figure(self, image_id: str, caption: str):
+    def figure(self, image_id: str):
+        """Full-width plate. Used for the book's own landscape artwork."""
+        self.clear_floats()
+        self._last_divider = False
         path = self.images[image_id]
         with Image.open(path) as im:
             iw, ih = im.size
-        max_w = TEXT_W
-        max_h = 105 * mm
-        scale = min(max_w / iw, max_h / ih)
+        scale = min(TEXT_W / iw, (110 * mm) / ih)
         w, h = iw * scale, ih * scale
-        cap_lines = wrap(caption, "Vazir-Light", 9.4, TEXT_W - 4 * mm)
-        cap_h = len(cap_lines) * 5.4 * mm + 4 * mm
-        self.ensure(h + cap_h + 8 * mm)
-        top = self.y + 2 * mm
+        self.ensure(h + 10 * mm)
+        top = self.y + 1 * mm
         x = M_SIDE + (TEXT_W - w) / 2
         self.c.drawImage(ImageReader(str(path)), x, top - h, w, h,
                          preserveAspectRatio=True, mask="auto")
         self.c.setStrokeColorRGB(0.78, 0.74, 0.66)
         self.c.setLineWidth(0.6)
         self.c.rect(x, top - h, w, h, stroke=1, fill=0)
-        self.y = top - h - 5.5 * mm
-        badge = f"{image_id} — "
-        first = True
-        for line in cap_lines:
-            text = (badge + line) if first else line
-            self.draw_line(text, "Vazir-Light", 9.4, MUTED, justify=False,
-                           left=M_SIDE + 2 * mm, right=M_SIDE + TEXT_W - 2 * mm,
-                           leading=5.4 * mm)
-            first = False
-        self.y -= 5 * mm
+        self.y = top - h - 8 * mm
 
     def table(self, rows: list[list[str]]):
         self.clear_floats()
+        self._last_divider = False
         header, *body = rows
         cols = len(header)
         weights = [0.13, 0.20, 0.26, 0.41] if cols == 4 else [1 / cols] * cols
@@ -502,10 +491,6 @@ class ChapterPDF:
         c.setFont("Vazir-Light", 10.5)
         c.setFillColorRGB(0.88, 0.86, 0.82)
         c.drawCentredString(PAGE_W / 2, PAGE_H - 63 * mm, shape(BOOK_TITLE))
-        c.setFont("Vazir-Light", 8)
-        c.setFillColorRGB(0.80, 0.78, 0.74)
-        c.drawCentredString(PAGE_W / 2, 12 * mm,
-                            shape("تصویر آغاز فصل: تصویرسازی اختصاصی — سند تاریخی نیست"))
 
     def save(self):
         self.c.save()
@@ -517,6 +502,8 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
     pdf = ChapterPDF(out, title, images)
     _, _, subtitle = title.partition("|")
     pdf.opener(images["A02"], title, subtitle.strip())
+    pdf.c.bookmarkPage("chapter-01")
+    pdf.c.addOutlineEntry(title, "chapter-01", level=0, closed=False)
     pdf.new_page()
     for block in blocks:
         if block.kind == "figure":
@@ -526,10 +513,11 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
                 w = float(block.attrs.get("width", "60mm").replace("mm", "")) * mm
                 pdf.float_figure(block.attrs["id"], side, w)
             elif placement == "inline":
-                pdf.figure(block.attrs["id"], "")
+                pdf.figure(block.attrs["id"])
             continue
         if block.kind == "heading":
-            pdf.heading(block.text)
+            # section titles are never printed; they only mark a break
+            pdf.divider()
         elif block.kind == "quote":
             pdf.quote(block.text)
         elif block.kind == "hr":
@@ -648,7 +636,14 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
     p.add_run(subtitle.strip())
     rtl(p, WD_ALIGN_PARAGRAPH.CENTER, size=22, bold=True, space_after=14)
 
+    last_divider = True
     for block in blocks:
+        if block.kind in ("meta", "note", "credits", "internal"):
+            continue
+        if block.kind == "figure" and block.attrs.get("placement") == "opener":
+            pass
+        elif block.kind not in ("heading", "hr"):
+            last_divider = False
         if block.kind == "figure":
             image_id = block.attrs["id"]
             placement = block.attrs.get("placement", "")
@@ -662,7 +657,7 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
             elif placement == "opener":
                 width_mm = 150
             else:
-                width_mm = 120
+                width_mm = 166
             height_mm = width_mm * ih / iw
             if height_mm > 150:
                 height_mm = 150
@@ -673,22 +668,21 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
                 p.paragraph_format.space_after = Pt(0)
                 p.paragraph_format.space_before = Pt(0)
                 p.paragraph_format.line_spacing = Pt(1)
-        elif block.kind == "heading":
+        elif block.kind in ("heading", "hr"):
+            if last_divider:
+                continue
             p = doc.add_paragraph()
-            p.add_run(block.text)
-            rtl(p, WD_ALIGN_PARAGRAPH.RIGHT, size=14, bold=True,
-                color=(0x2A, 0x2C, 0x33), space_after=6)
-            p.paragraph_format.space_before = Pt(12)
+            p.add_run("\u2014  \u066d  \u2014")
+            rtl(p, WD_ALIGN_PARAGRAPH.CENTER, size=12, color=(0x8C, 0x6B, 0x2E),
+                space_after=10, line=1.2)
+            p.paragraph_format.space_before = Pt(10)
+            last_divider = True
         elif block.kind == "quote":
             p = doc.add_paragraph()
             p.add_run(block.text)
             rtl(p, WD_ALIGN_PARAGRAPH.RIGHT, size=12, bold=True,
                 color=(0x3D, 0x39, 0x4C))
             p.paragraph_format.right_indent = Mm(10)
-        elif block.kind == "hr":
-            p = doc.add_paragraph()
-            p.add_run("\u2042")
-            rtl(p, WD_ALIGN_PARAGRAPH.CENTER, size=12, color=(0x8C, 0x6B, 0x2E))
         elif block.kind == "table":
             header, *body = block.rows
             table = doc.add_table(rows=1, cols=len(header))
@@ -708,8 +702,6 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
                     rtl(cells[idx].paragraphs[0], WD_ALIGN_PARAGRAPH.RIGHT,
                         size=10, space_after=2, line=1.3)
             doc.add_paragraph()
-        elif block.kind in ("meta", "note", "credits", "internal"):
-            continue
         else:
             p = doc.add_paragraph()
             p.add_run(block.text)
