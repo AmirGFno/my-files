@@ -1,0 +1,13 @@
+# درخواست‌های دانلود تصویرِ تاریخی — هر خط: filename|direct-url
+# این فایل را ایجنتِ پژوهشِ تصویر پر می‌کند؛ بعد ورک‌فلوی upload-historical.yml
+# روی همان شاخه اجرا می‌شود و فایل‌ها را در book/images/historical می‌گذارد.
+#
+# قاعده: هیچ لینکی بدون بازبینیِ چشمی اضافه نشود. لینکِ مستقیم از upload.wikimedia.org.
+# ID  |  filename                                   |  توضیحِ کوتاه
+# H02 |  H02_CH02_gobekli-tepe-enclosure-d.jpg     |  گوبکلی‌تپه، دایرهٔ D
+# H47 |  H47_CH02_gobekli-feline-relief.jpg        |  نقشِ گربه‌سان روی ستون
+# H48 |  H48_CH02_lion-man-hohlenstein.jpg         |  مردِ شیرِ هوهلن‌اشتاین
+# H03 |  H03_CH02_nemrut-lion-horoscope.jpg        |  شیرِ نمروت با ستارگان
+
+# ردیف‌های واقعی را زیرِ این خط بنویس، به شکل:
+# H02_CH02_gobekli-tepe-enclosure-d.jpg|https://upload.wikimedia.org/wikipedia/commons/x/xx/File.jpg

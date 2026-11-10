@@ -43,8 +43,8 @@ jobs:
             return 1
           }
 
-          while IFS='|' read -r fname url; do
-            [ -z "$fname" ] && continue
+          download_one() {
+            fname="$1"; url="$2"
             echo "::group::$fname"
             ok=0
             
@@ -72,9 +72,14 @@ jobs:
               failed="$failed $fname"
             fi
             echo "::endgroup::"
-            
+
             # تاخیر ۳ ثانیه‌ای بین هر دانلود برای جلوگیری از مسدود شدن
             sleep 3
+          }
+
+          while IFS='|' read -r fname url; do
+            [ -z "$fname" ] && continue
+            download_one "$fname" "$url"
           done <<'EOF'
           H01_CH01_antikythera-mechanism.jpg|https://upload.wikimedia.org/wikipedia/commons/6/63/Antikythera_Mechanism_%28NAMA%29_2017.jpg
           H46_CH01_prague-orloj-dial.jpg|https://upload.wikimedia.org/wikipedia/commons/4/43/Praha_Astronomical_Clock_Dial_01.jpg
@@ -104,6 +109,18 @@ jobs:
           H66_CH07_sanchi-torana.jpg|https://upload.wikimedia.org/wikipedia/commons/1/1e/East_Torana%2C_Sanchi_01.jpg
           H53_CH05_narmer-palette.jpg|https://upload.wikimedia.org/wikipedia/commons/b/be/Narmer_Palette.jpg
           EOF
+
+          # ردیف‌های تازه (فصل‌های بعد) از این فایل خوانده می‌شوند؛ هر خط: fname|url
+          # اگر فایل نبود یا خطی داشت که با # شروع می‌شد، نادیده گرفته می‌شود.
+          EXTRA="book/images/historical-requests.txt"
+          if [ -f "$EXTRA" ]; then
+            while IFS='|' read -r fname url; do
+              [ -z "${fname// /}" ] && continue
+              case "$fname" in \#*) continue ;; esac
+              download_one "$fname" "$url"
+            done < "$EXTRA"
+          fi
+
 
           if [ -n "${failed:-}" ]; then
             echo "::warning::Some files failed to download:$failed"

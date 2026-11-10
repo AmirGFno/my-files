@@ -102,13 +102,41 @@ def parse_markdown(path: Path) -> tuple[str, list[Block]]:
 
 
 # ---------------------------------------------------------------- images
-IMAGE_SOURCES = {
-    "A02": ROOT / "book/images/originals/A02_ch01_opener.jpg",
-    "A17": ROOT / "book/images/originals/A17_ch01_inner.jpg",
-    "H01": ROOT / "book/images/historical/H01_CH01_antikythera-mechanism.jpg",
-    "H46": ROOT / "book/images/historical/H46_CH01_prague-orloj-dial.jpg",
-    "H45": ROOT / "book/chapters/ch01/images/historical/H45_CH01_dunhuang-star-chart.png",
+ORDINALS = {
+    1: "یکم", 2: "دوم", 3: "سوم", 4: "چهارم", 5: "پنجم", 6: "ششم",
+    7: "هفتم", 8: "هشتم", 9: "نهم", 10: "دهم", 11: "یازدهم", 12: "دوازدهم",
+    13: "سیزدهم", 14: "چهاردهم",
 }
+
+
+def chapter_number(chapter_dir: Path) -> str:
+    """ch01 -> "01"."""
+    m = re.search(r"(\d{1,2})", chapter_dir.name)
+    if not m:
+        raise ValueError(f"cannot read chapter number from {chapter_dir.name}")
+    return m.group(1).zfill(2)
+
+
+def image_source(chapter_dir: Path, image_id: str) -> Path:
+    """Resolve an image id to a file.
+
+    The chapter's own images/ folder wins, so a chapter can pin copies;
+    the shared book/images folders are the fallback.
+    """
+    pattern = f"{image_id}_*"
+    candidates = [
+        *sorted((chapter_dir / "images" / "originals").glob(pattern)),
+        *sorted((chapter_dir / "images" / "historical").glob(pattern)),
+        *sorted((ROOT / "book/images/originals").glob(pattern)),
+        *sorted((ROOT / "book/images/historical").glob(pattern)),
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path
+    raise FileNotFoundError(
+        f"no file for {image_id} in {chapter_dir.name}; looked in "
+        "images/originals, images/historical, book/images/originals, "
+        "book/images/historical")
 
 
 def prepare_images(chapter_dir: Path, ids: list[str]) -> dict[str, Path]:
@@ -128,9 +156,13 @@ def prepare_images(chapter_dir: Path, ids: list[str]) -> dict[str, Path]:
     scrim.save(scrim_path)
     prepared["_scrim"] = scrim_path
     for image_id in ids:
-        src = IMAGE_SOURCES[image_id]
-        if not src.exists():
-            raise FileNotFoundError(src)
+        try:
+            src = image_source(chapter_dir, image_id)
+        except FileNotFoundError as exc:
+            # A missing historical image must not block the whole build: the
+            # figure is skipped and reported, and appears once the file lands.
+            print(f"WARNING: skipping figure {image_id} — {exc}")
+            continue
         dst = out_dir / f"{image_id}_print.jpg"
         with Image.open(src) as im:
             im = im.convert("RGB")
@@ -607,7 +639,8 @@ class ChapterPDF:
             self.paragraph(line, size=10.2, leading=17.5, font="Vazir",
                            color=INK, justify=True, gap=6)
 
-    def opener(self, image_path: Path, title: str, subtitle: str):
+    def opener(self, image_path: Path, title: str, subtitle: str,
+               chapter_no: str = "یکم"):
         self.new_page(furniture=False)
         c = self.c
         with Image.open(image_path) as im:
@@ -623,7 +656,7 @@ class ChapterPDF:
         c.setFillColorRGB(0, 0, 0, alpha=1)
         c.setFillColorRGB(0.86, 0.74, 0.44)
         c.setFont("Vazir-Med", 13)
-        c.drawCentredString(PAGE_W / 2, PAGE_H - 32 * mm, shape("فصل اول"))
+        c.drawCentredString(PAGE_W / 2, PAGE_H - 32 * mm, shape(f"فصل {chapter_no}"))
         c.setFillColorRGB(0.98, 0.96, 0.92)
         c.setFont("Vazir-Bold", 25)
         c.drawCentredString(PAGE_W / 2, PAGE_H - 47 * mm, shape(subtitle))
@@ -640,16 +673,24 @@ class ChapterPDF:
 
 
 def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[str, Path]):
-    out = chapter_dir / "build" / "chapter-01-fa.pdf"
+    num = chapter_number(chapter_dir)
+    out = chapter_dir / "build" / f"chapter-{num}-fa.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)
     pdf = ChapterPDF(out, title, images)
     for b in blocks:
         if b.kind == "footnotes":
             pdf.footnote_defs.update(b.attrs)
     _, _, subtitle = title.partition("|")
-    pdf.opener(images["A02"], title, subtitle.strip())
-    pdf.c.bookmarkPage("chapter-01")
-    pdf.c.addOutlineEntry(title, "chapter-01", level=0, closed=False)
+    opener_id = next(
+        (b.attrs["id"] for b in blocks
+         if b.kind == "figure" and b.attrs.get("placement") == "opener"),
+        None,
+    )
+    if opener_id:
+        pdf.opener(images[opener_id], title, subtitle.strip(),
+                   chapter_no=ORDINALS.get(int(num), ""))
+    pdf.c.bookmarkPage(f"chapter-{num}")
+    pdf.c.addOutlineEntry(title, f"chapter-{num}", level=0, closed=False)
     pdf.new_page()
     last_text_idx = max(
         (i for i, b in enumerate(blocks) if b.kind in ("para", "quote")),
@@ -657,6 +698,8 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
     )
     for block_idx, block in enumerate(blocks):
         if block.kind == "figure":
+            if block.attrs["id"] not in images:
+                continue
             placement = block.attrs.get("placement", "")
             if placement.startswith("float-"):
                 side = placement.split("-", 1)[1]
@@ -873,6 +916,8 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
             last_divider = False
         if block.kind == "figure":
             image_id = block.attrs["id"]
+            if image_id not in images:
+                continue
             placement = block.attrs.get("placement", "")
             p = doc.add_paragraph()
             rtl(p, WD_ALIGN_PARAGRAPH.CENTER, space_after=0)
@@ -950,7 +995,7 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
     footer.add_run(BOOK_TITLE)
     rtl(footer, WD_ALIGN_PARAGRAPH.CENTER, size=9, color=(0x6B, 0x6E, 0x78))
 
-    out = chapter_dir / "build" / "chapter-01-fa.docx"
+    out = chapter_dir / "build" / f"chapter-{chapter_number(chapter_dir)}-fa.docx"
     out.parent.mkdir(parents=True, exist_ok=True)
     doc.save(out)
     used = {m for b in blocks if b.kind == "table"
@@ -963,7 +1008,8 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
 def main():
     chapter_dir = Path(sys.argv[1] if len(sys.argv) > 1 else "book/chapters/ch01")
     chapter_dir = chapter_dir.resolve()
-    src = chapter_dir / "chapter-01.md"
+    num = chapter_number(chapter_dir)
+    src = chapter_dir / f"chapter-{num}.md"
     title, blocks = parse_markdown(src)
     ids = [b.attrs["id"] for b in blocks if b.kind == "figure"]
     images = prepare_images(chapter_dir, ids)
@@ -972,7 +1018,7 @@ def main():
     credits = [b.text for b in blocks if b.kind == "credits"]
     if credits:
         cpath = chapter_dir / "build" / "image-credits.md"
-        cpath.write_text("# اعتبارات تصاویر فصل یکم\n\n"
+        cpath.write_text(f"# اعتبارات تصاویر فصل {fa(int(num))}\n\n"
                          "این فهرست داخل روایت چاپ نمی‌شود؛ در پایان‌نامهٔ منابعِ کتاب ادغام خواهد شد.\n\n"
                          + "\n\n".join(credits) + "\n", encoding="utf-8")
     words = len(re.findall(r"\S+", " ".join(b.text for b in blocks if b.kind in
