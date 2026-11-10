@@ -108,6 +108,11 @@ jobs:
           H63_CH06_faravahar-persepolis.jpg|https://upload.wikimedia.org/wikipedia/commons/7/7c/Faravahar_sign_in_Takhte_Jamshid.jpg
           H66_CH07_sanchi-torana.jpg|https://upload.wikimedia.org/wikipedia/commons/1/1e/East_Torana%2C_Sanchi_01.jpg
           H53_CH05_narmer-palette.jpg|https://upload.wikimedia.org/wikipedia/commons/b/be/Narmer_Palette.jpg
+          # ---- فصل دوم — عصر اول؛ شیر (اسد) ----
+          H02_CH02_gobekli-tepe-enclosure-d.jpg|https://upload.wikimedia.org/wikipedia/commons/e/ec/G%C3%B6beklitepe_Building_D_5351.jpg
+          H47_CH02_gobekli-tepe-pillar-predator.jpg|https://upload.wikimedia.org/wikipedia/commons/d/d4/G%C3%B6bekli_Tepe_Enclosure_C_Pillar_27_relief.jpg
+          H48_CH02_lion-man-hohlenstein-stadel.jpg|https://upload.wikimedia.org/wikipedia/commons/4/4c/Loewenmensch1.jpg
+          H03_CH02_nemrut-lion-horoscope.jpg|https://upload.wikimedia.org/wikipedia/commons/6/6b/L%C3%B6wenhoroskop_Humann_1883.jpg
           EOF
 
           # ردیف‌های تازه (فصل‌های بعد) از این فایل خوانده می‌شوند؛ هر خط: fname|url
@@ -136,5 +141,5 @@ jobs:
             echo "No changes to commit"
             exit 0
           fi
-          git commit -m "Add historical images (H01…H75) to book/images/historical"
+          git commit -m "Add historical images to book/images/historical"
           git push
