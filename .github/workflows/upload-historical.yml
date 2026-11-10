@@ -2,6 +2,11 @@ name: Upload historical images to book/images/historical
 
 on:
   workflow_dispatch:
+  # اجرای خودکار با پوش یک فایلِ نشانگر (راهِ دور زدنِ نبودِ دسترسیِ actions:write).
+  # نشانگر در کامیتِ ربات تغییر نمی‌کند، پس حلقهٔ بی‌پایان نمی‌سازد.
+  push:
+    paths:
+      - 'book/images/fetch-trigger.txt'
 
 permissions:
   contents: write
