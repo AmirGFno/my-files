@@ -2,6 +2,11 @@ name: Upload historical images to book/images/historical
 
 on:
   workflow_dispatch:
+  # اجرای خودکار با پوش یک فایلِ نشانگر (راهِ دور زدنِ نبودِ دسترسیِ actions:write).
+  # نشانگر در کامیتِ ربات تغییر نمی‌کند، پس حلقهٔ بی‌پایان نمی‌سازد.
+  push:
+    paths:
+      - 'book/images/fetch-trigger.txt'
 
 permissions:
   contents: write
@@ -43,8 +48,8 @@ jobs:
             return 1
           }
 
-          while IFS='|' read -r fname url; do
-            [ -z "$fname" ] && continue
+          download_one() {
+            fname="$1"; url="$2"
             echo "::group::$fname"
             ok=0
             
@@ -72,9 +77,15 @@ jobs:
               failed="$failed $fname"
             fi
             echo "::endgroup::"
-            
+
             # تاخیر ۳ ثانیه‌ای بین هر دانلود برای جلوگیری از مسدود شدن
             sleep 3
+          }
+
+          while IFS='|' read -r fname url; do
+            [ -z "${fname// /}" ] && continue
+            case "$fname" in \#*) continue ;; esac
+            download_one "$fname" "$url"
           done <<'EOF'
           H01_CH01_antikythera-mechanism.jpg|https://upload.wikimedia.org/wikipedia/commons/6/63/Antikythera_Mechanism_%28NAMA%29_2017.jpg
           H46_CH01_prague-orloj-dial.jpg|https://upload.wikimedia.org/wikipedia/commons/4/43/Praha_Astronomical_Clock_Dial_01.jpg
@@ -103,7 +114,24 @@ jobs:
           H63_CH06_faravahar-persepolis.jpg|https://upload.wikimedia.org/wikipedia/commons/7/7c/Faravahar_sign_in_Takhte_Jamshid.jpg
           H66_CH07_sanchi-torana.jpg|https://upload.wikimedia.org/wikipedia/commons/1/1e/East_Torana%2C_Sanchi_01.jpg
           H53_CH05_narmer-palette.jpg|https://upload.wikimedia.org/wikipedia/commons/b/be/Narmer_Palette.jpg
+          # ---- فصل دوم — عصر اول؛ شیر (اسد) ----
+          H02_CH02_gobekli-tepe-enclosure-d.jpg|https://upload.wikimedia.org/wikipedia/commons/e/ec/G%C3%B6beklitepe_Building_D_5351.jpg
+          H47_CH02_gobekli-tepe-pillar-predator.jpg|https://upload.wikimedia.org/wikipedia/commons/d/d4/G%C3%B6bekli_Tepe_Enclosure_C_Pillar_27_relief.jpg
+          H48_CH02_lion-man-hohlenstein-stadel.jpg|https://upload.wikimedia.org/wikipedia/commons/4/4c/Loewenmensch1.jpg
+          H03_CH02_nemrut-lion-horoscope.jpg|https://upload.wikimedia.org/wikipedia/commons/6/6b/L%C3%B6wenhoroskop_Humann_1883.jpg
           EOF
+
+          # ردیف‌های تازه (فصل‌های بعد) از این فایل خوانده می‌شوند؛ هر خط: fname|url
+          # اگر فایل نبود یا خطی داشت که با # شروع می‌شد، نادیده گرفته می‌شود.
+          EXTRA="book/images/historical-requests.txt"
+          if [ -f "$EXTRA" ]; then
+            while IFS='|' read -r fname url; do
+              [ -z "${fname// /}" ] && continue
+              case "$fname" in \#*) continue ;; esac
+              download_one "$fname" "$url"
+            done < "$EXTRA"
+          fi
+
 
           if [ -n "${failed:-}" ]; then
             echo "::warning::Some files failed to download:$failed"
@@ -119,5 +147,5 @@ jobs:
             echo "No changes to commit"
             exit 0
           fi
-          git commit -m "Add historical images (H01…H75) to book/images/historical"
+          git commit -m "Add historical images to book/images/historical"
           git push

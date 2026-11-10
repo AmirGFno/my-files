@@ -1,0 +1,15 @@
+# درخواست‌های دانلود تصویرِ تاریخی — هر خط: filename|direct-url
+# این فایل را ایجنتِ پژوهشِ تصویر پر می‌کند؛ بعد ورک‌فلوی upload-historical.yml
+# روی همان شاخه اجرا می‌شود و فایل‌ها را در book/images/historical می‌گذارد.
+#
+# قاعده: هیچ لینکی بدون بازبینیِ چشمی اضافه نشود. لینکِ مستقیم از upload.wikimedia.org.
+
+# ---- فصل دوم — عصر اول؛ شیر (اسد) ----
+# H02 — گوبکلی‌تپه، دایرهٔ D | Dosseman | 2019 | CC BY-SA 4.0 | 1600×1067
+H02_CH02_gobekli-tepe-enclosure-d.jpg|https://upload.wikimedia.org/wikipedia/commons/e/ec/G%C3%B6beklitepe_Building_D_5351.jpg
+# H47 — نقشِ جانورِ شکارچی، ستون ۲۷ دایرهٔ C | Kerimove | 2026 | CC0 | 864×1148
+H47_CH02_gobekli-tepe-pillar-predator.jpg|https://upload.wikimedia.org/wikipedia/commons/d/d4/G%C3%B6bekli_Tepe_Enclosure_C_Pillar_27_relief.jpg
+# H48 — مردِ شیرِ هوهلن‌اشتاین | Dagmar Hollmann | 2013 | CC BY-SA 4.0 | 2218×3944
+H48_CH02_lion-man-hohlenstein-stadel.jpg|https://upload.wikimedia.org/wikipedia/commons/4/4c/Loewenmensch1.jpg
+# H03 — شیرِ نمروت با ستارگان | عکاس ناشناس | 1890 | Public Domain | 685×543
+H03_CH02_nemrut-lion-horoscope.jpg|https://upload.wikimedia.org/wikipedia/commons/6/6b/L%C3%B6wenhoroskop_Humann_1883.jpg
