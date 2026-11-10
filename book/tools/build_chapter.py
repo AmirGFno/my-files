@@ -294,7 +294,11 @@ class ChapterPDF:
             x_right = M_SIDE + TEXT_W - col * col_w - 1.5 * mm
             self.c.setFont("Vazir-Light", self.NOTE_SIZE)
             self.c.setFillColorRGB(*MUTED)
-            # Latin term + Persian numeral: draw in logical order, no bidi pass
+            # Latin term + Persian numeral: draw in logical order, no bidi pass.
+            # setFont is set again right before drawing: the canvas keeps the last
+            # font used by any previous draw, and without this the number comes out
+            # in a Latin face instead of persian digits.
+            self.c.setFont("Vazir-Light", self.NOTE_SIZE)
             self.c.drawRightString(x_right, y - row * self.NOTE_LEAD,
                                    f"{fa(num)}. {val}")
 
@@ -309,13 +313,91 @@ class ChapterPDF:
         c.setFont("Vazir-Med", 9.5)
         c.drawString(M_SIDE, M_BOT - 12 * mm, shape(fa(self.page)))
 
+    def measure_tail(self, ids: set[int], blocks) -> float:
+        """Height of the closing run of paragraphs, measured as one block."""
+        total = 0.0
+        total += 0  # all four are plain paragraphs
+        tail_last = max(ids)
+        for idx in sorted(ids):
+            lines, end_y, last_page = self._measure_paragraph(
+                blocks[idx].text, size=BODY_SIZE, leading=BODY_LEAD, font="Vazir",
+                indent=0.0, first_indent=0.0, gap=7.0)
+            height = 0.0
+            if lines:
+                if idx == tail_last:
+                    height = ((len(lines) - 1) * BODY_LEAD
+                              + BODY_SIZE * 0.35 + 1.0)
+                else:
+                    height = len(lines) * BODY_LEAD
+            total += height
+        return total
+
     def ensure(self, needed: float):
         if self.y - needed < self.bottom_limit:
             self.new_page()
 
     # -- text primitives
+    MARK_RE = re.compile(r"\[(\d+)\]")
+
+    def _draw_line_with_marks(self, text, font, size, color, justify,
+                              right, left, leading):
+        """A line carrying [n] footnote markers.
+
+        The marker prints as a small raised Persian numeral after the word it
+        follows. Justification is measured on the text without the markers and
+        the markers are then appended, so the right edge stays on the margin.
+        """
+        self._last_divider = False
+        right = M_SIDE + TEXT_W if right is None else right
+        left = M_SIDE if left is None else left
+
+        parts, marks, pos = [], [], 0
+        for m in self.MARK_RE.finditer(text):
+            parts.append(text[pos:m.start()].rstrip())
+            marks.append(m.group(1))
+            pos = m.end()
+        tail = text[pos:]
+        if tail.strip():
+            parts.append(tail)
+
+        c = self.c
+        c.setFillColorRGB(*color)
+        x = left
+        avail = right - left
+        for i, plain in enumerate(parts):
+            if not plain:
+                continue
+            shown = shape(plain)
+            natural = pdfmetrics.stringWidth(shown, font, size)
+            spaces = plain.count(" ")
+            fill_line = (justify and spaces and i == len(parts) - 1)
+            t = c.beginText()
+            t.setTextOrigin(x, self.y)
+            t.setFont(font, size)
+            if fill_line and natural < (right - x):
+                t.setWordSpace(((right - x) - natural) / spaces)
+                drawn = right - x
+            else:
+                t.setWordSpace(0)
+                drawn = natural
+            t.textOut(shown)
+            c.drawText(t)
+            x += drawn
+            if i < len(marks):
+                ms = size * 0.52
+                c.setFont("Vazir-Light", ms)
+                c.setFillColorRGB(*MUTED)
+                c.drawString(x + 0.4, self.y + size * 0.36, fa(marks[i]))
+                c.setFillColorRGB(*color)
+                x += 1.4 + pdfmetrics.stringWidth(fa(marks[i]), "Vazir-Light", ms)
+        self.y -= leading if leading else size * 1.5
+
     def draw_line(self, text: str, font: str, size: float, color, justify=False,
                   right=None, left=None, leading=None):
+        if type(self).MARK_RE.search(text):
+            self._draw_line_with_marks(text, font, size, color, justify,
+                                       right, left, leading)
+            return
         self._last_divider = False
         right = M_SIDE + TEXT_W if right is None else right
         left = M_SIDE if left is None else left
@@ -704,6 +786,18 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
         (i for i, b in enumerate(blocks) if b.kind in ("para", "quote")),
         default=-1,
     )
+    # the last few text blocks travel together: at most 4, and never past a heading
+    text_idx = [i for i, b in enumerate(blocks) if b.kind in ("para", "quote")]
+    tail_together = set()
+    for i in reversed(text_idx):
+        if i == last_text_idx:
+            tail_together.add(i)
+            continue
+        if len(tail_together) >= 8:
+            break
+        if any(blocks[j].kind == "heading" for j in range(i + 1, last_text_idx + 1)):
+            break
+        tail_together.add(i)
     for block_idx, block in enumerate(blocks):
         if block.kind == "figure":
             if block.attrs["id"] not in images:
@@ -730,6 +824,18 @@ def build_pdf(chapter_dir: Path, title: str, blocks: list[Block], images: dict[s
             continue
         else:
             lead_in = block.text.rstrip().endswith(":")
+            # a paragraph carrying [n] markers needs room for its note band
+            marks = re.findall(r"\[(\d+)\]", block.text)
+            if marks:
+                pdf.ensure(pdf.note_band_height(len(marks)) + 4 * BODY_LEAD)
+                pdf.reserve_notes(marks)
+            # The closing paragraph may perch at the very foot of a page; the
+            # paragraphs that come just before it move down with it, so the
+            # chapter does not end with three orphan lines on a blank page.
+            if block_idx == min(tail_together):
+                need = pdf.measure_tail(tail_together, blocks)
+                if pdf.y - need < pdf.bottom_limit:
+                    pdf.new_page()
             pdf.paragraph(
                 block.text,
                 keep_next_lines=2 if lead_in else 0,
@@ -773,6 +879,26 @@ def docx_tight_wrap(paragraph, side: str = "left", dist_mm: float = 4.0):
         if el is not None:
             anchor.append(el)
     inline.getparent().replace(inline, anchor)
+
+
+def _docx_runs_with_marks(par, text: str):
+    """Write `text` into `par`, turning each [n] into a real superscript marker."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    pos = 0
+    for m in re.finditer(r"\[(\d+)\]", text):
+        chunk = text[pos:m.start()]
+        if chunk:
+            par.add_run(chunk)
+        run = par.add_run()
+        run.font.superscript = True
+        ref = OxmlElement("w:footnoteReference")
+        ref.set(qn("w:id"), m.group(1))
+        run._r.append(ref)
+        pos = m.end()
+    tail = text[pos:]
+    if tail:
+        par.add_run(tail)
 
 
 def docx_add_footnotes(path: Path, notes: dict[str, str]):
@@ -996,7 +1122,7 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
             doc.add_paragraph()
         else:
             p = doc.add_paragraph()
-            p.add_run(block.text)
+            _docx_runs_with_marks(p, block.text)
             rtl(p, keep_next=block.text.rstrip().endswith(":"))
 
     footer = section.footer.paragraphs[0]
@@ -1006,8 +1132,9 @@ def build_docx(chapter_dir: Path, title: str, blocks: list[Block], images: dict[
     out = chapter_dir / "build" / f"chapter-{chapter_number(chapter_dir)}-fa.docx"
     out.parent.mkdir(parents=True, exist_ok=True)
     doc.save(out)
-    used = {m for b in blocks if b.kind == "table"
-            for r in b.rows for m in re.findall(r"\[(\d+)\]", " ".join(r))}
+    used = {m for b in blocks
+            for r in ([" ".join(r) for r in b.rows] if b.kind == "table" else [b.text])
+            for m in re.findall(r"\[(\d+)\]", r)}
     if used:
         docx_add_footnotes(out, {k: v for k, v in note_defs.items() if k in used})
     return out
