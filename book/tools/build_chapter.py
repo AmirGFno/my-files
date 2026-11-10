@@ -361,6 +361,11 @@ class ChapterPDF:
             self.y = min(self.y, min(f["bot"] for f in self.floats) - 3 * mm)
             self.floats = []
 
+    # A float never eats more than this share of the text column's height on a
+    # page: a very tall portrait would otherwise squeeze the wrap into a
+    # one-word column and leave a huge white gap at the foot of the page.
+    FLOAT_MAX_H = 118 * mm
+
     def float_figure(self, image_id: str, side: str, width_mm: float):
         """Place a small image flush to one margin; following text wraps around it."""
         path = self.images[image_id]
@@ -368,6 +373,9 @@ class ChapterPDF:
             iw, ih = im.size
         w = min(width_mm, TEXT_W * 0.52)
         h = w * ih / iw
+        if h > self.FLOAT_MAX_H:
+            h = self.FLOAT_MAX_H
+            w = h * iw / ih
         if self.y - h < self.bottom_limit:
             self.new_page()
         top = self.y + BODY_SIZE * 0.82

@@ -83,7 +83,8 @@ jobs:
           }
 
           while IFS='|' read -r fname url; do
-            [ -z "$fname" ] && continue
+            [ -z "${fname// /}" ] && continue
+            case "$fname" in \#*) continue ;; esac
             download_one "$fname" "$url"
           done <<'EOF'
           H01_CH01_antikythera-mechanism.jpg|https://upload.wikimedia.org/wikipedia/commons/6/63/Antikythera_Mechanism_%28NAMA%29_2017.jpg
